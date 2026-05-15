@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 // PATCH: Update a product/service
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
@@ -30,7 +30,7 @@ export async function PATCH(
 // DELETE: Remove a product/service
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
