@@ -1,31 +1,65 @@
-import mongoose from 'mongoose';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 // Load environment variables from .env.local
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../../.env.local') });
+const rootDir = path.resolve(__dirname, '../../');
+dotenv.config({ path: path.resolve(rootDir, '.env.local') });
 
-const MONGODB_URI = process.env.MONGODB_URI;
+function getFirebaseAdmin() {
+  if (getApps().length > 0) {
+    return getFirestore();
+  }
 
-if (!MONGODB_URI) {
-  console.error('❌ MONGODB_URI is not defined in .env.local');
-  process.exit(1);
+  const explicitPath = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  const defaultLocalPath = path.resolve(rootDir, 'serviceAccountKey.json');
+  const serviceAccountPath = explicitPath || (fs.existsSync(defaultLocalPath) ? defaultLocalPath : null);
+
+  if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    const app = initializeApp({
+      credential: cert(serviceAccount),
+      projectId: serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID,
+    });
+    return getFirestore(app);
+  }
+
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    const app = initializeApp({
+      credential: cert(serviceAccount),
+      projectId: serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID,
+    });
+    return getFirestore(app);
+  }
+
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+  if (projectId && clientEmail && privateKey) {
+    privateKey = privateKey.replace(/\\n/g, '\n');
+    const app = initializeApp({
+      credential: cert({ projectId, clientEmail, privateKey }),
+      projectId,
+    });
+    return getFirestore(app);
+  }
+
+  if (projectId) {
+    const app = initializeApp({ projectId });
+    return getFirestore(app);
+  }
+
+  throw new Error(
+    'Firebase credentials not found! Please define FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY in .env.local or place serviceAccountKey.json in the studio-billing folder.'
+  );
 }
-
-// Define inline schemas since we are running as a standalone ESM script
-// and importing TS models might be complex without a transpiler
-const ProductSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  category: { type: String, required: true },
-  price: { type: Number, required: true },
-  type: { type: String, default: 'Service' },
-  createdAt: { type: Date, default: Date.now },
-});
-
-const Product = mongoose.models.Product || mongoose.model('Product', ProductSchema);
 
 const initialProducts = [
   { name: 'Wedding Photography (Basic)', category: 'Photography', price: 75000, type: 'Service' },
@@ -38,33 +72,33 @@ const initialProducts = [
 
 async function recreateDB() {
   try {
-    console.log('🔄 Connecting to MongoDB...');
-    await mongoose.connect(MONGODB_URI);
-    console.log('✅ Connected successfully.');
+    console.log('🔄 Initializing Firebase Firestore connection...');
+    const db = getFirebaseAdmin();
+    console.log('✅ Connected to Firebase Firestore.');
 
-    const dbName = mongoose.connection.name;
-    console.log(`🗑️ Dropping database: ${dbName}...`);
-    await mongoose.connection.dropDatabase();
-    console.log(`✅ Database ${dbName} dropped.`);
+    console.log('🗑️ Clearing existing products from Firestore...');
+    const productsSnapshot = await db.collection('products').get();
+    const batch = db.batch();
+    productsSnapshot.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+    console.log(`✅ Cleared ${productsSnapshot.size} existing product documents.`);
 
     console.log('🌱 Seeding initial products...');
-    await Product.insertMany(initialProducts);
-    console.log(`✅ Seeded ${initialProducts.length} products.`);
+    for (const prod of initialProducts) {
+      await db.collection('products').add({
+        ...prod,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    console.log(`✅ Successfully seeded ${initialProducts.length} products to Firestore!`);
 
-    console.log('\n✨ Database recreation complete!');
-    console.log('🚀 You can now connect with MongoDB Compass at:', MONGODB_URI);
-    
-    await mongoose.disconnect();
+    console.log('\n✨ Firebase database setup and seeding complete!');
     process.exit(0);
   } catch (error) {
-    console.error('\n❌ Error recreating database:');
+    console.error('\n❌ Error recreating Firebase database:');
     console.error(error.message);
-    
-    if (error.message.includes('ECONNREFUSED')) {
-      console.log('\n💡 Tip: It looks like your MongoDB server is not running.');
-      console.log('Please start the MongoDB service and try again.');
-    }
-    
     process.exit(1);
   }
 }

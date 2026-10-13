@@ -7,68 +7,76 @@ import {
   DollarSign,
   TrendingUp,
   ArrowUpRight,
-  ArrowDownRight,
   Activity,
 } from "lucide-react";
 
-interface StatCard {
-  title: string;
-  value: string;
-  change: string;
-  trend: "up" | "down";
-  icon: React.ElementType;
-  color: string;
-  bgColor: string;
-}
-
-const stats: StatCard[] = [
-  {
-    title: "Total Customers",
-    value: "0",
-    change: "+0%",
-    trend: "up",
-    icon: Users,
-    color: "text-blue-600",
-    bgColor: "bg-blue-50",
-  },
-  {
-    title: "Total Orders",
-    value: "0",
-    change: "+0%",
-    trend: "up",
-    icon: ShoppingCart,
-    color: "text-emerald-600",
-    bgColor: "bg-emerald-50",
-  },
-  {
-    title: "Revenue",
-    value: "Rs. 0",
-    change: "+0%",
-    trend: "up",
-    icon: DollarSign,
-    color: "text-violet-600",
-    bgColor: "bg-violet-50",
-  },
-  {
-    title: "Pending Balance",
-    value: "Rs. 0",
-    change: "0%",
-    trend: "down",
-    icon: TrendingUp,
-    color: "text-amber-600",
-    bgColor: "bg-amber-50",
-  },
-];
-
 export default function DashboardPage() {
   const [greeting, setGreeting] = useState("");
+  const [dashboardData, setDashboardData] = useState({
+    totalCustomers: 0,
+    allTimeOrders: 0,
+    allTimeRevenue: 0,
+    pendingBalance: 0,
+    todayRevenue: 0,
+    todayOrderCount: 0,
+  });
 
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 12) setGreeting("Good Morning");
     else if (hour < 17) setGreeting("Good Afternoon");
     else setGreeting("Good Evening");
+
+    fetch("/api/dashboard/stats")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.error) {
+          setDashboardData(data);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load dashboard stats:", err);
+      });
   }, []);
+
+  const stats = [
+    {
+      title: "Total Customers",
+      value: `${dashboardData.totalCustomers}`,
+      change: "All time",
+      trend: "up" as const,
+      icon: Users,
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+    },
+    {
+      title: "Total Orders",
+      value: `${dashboardData.allTimeOrders || dashboardData.todayOrderCount}`,
+      change: `${dashboardData.todayOrderCount} today`,
+      trend: "up" as const,
+      icon: ShoppingCart,
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50",
+    },
+    {
+      title: "Revenue",
+      value: `Rs. ${dashboardData.allTimeRevenue || dashboardData.todayRevenue}`,
+      change: `Rs. ${dashboardData.todayRevenue} today`,
+      trend: "up" as const,
+      icon: DollarSign,
+      color: "text-violet-600",
+      bgColor: "bg-violet-50",
+    },
+    {
+      title: "Pending Balance",
+      value: `Rs. ${dashboardData.pendingBalance}`,
+      change: "Due payments",
+      trend: "up" as const,
+      icon: TrendingUp,
+      color: "text-amber-600",
+      bgColor: "bg-amber-50",
+    },
+  ];
 
   return (
     <div className="space-y-8">
@@ -97,18 +105,8 @@ export default function DashboardPage() {
                 >
                   <Icon className="h-5 w-5" />
                 </div>
-                <div
-                  className={`flex items-center gap-0.5 text-xs font-semibold ${
-                    stat.trend === "up"
-                      ? "text-emerald-600"
-                      : "text-red-500"
-                  }`}
-                >
-                  {stat.trend === "up" ? (
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  ) : (
-                    <ArrowDownRight className="h-3.5 w-3.5" />
-                  )}
+                <div className="flex items-center gap-0.5 text-xs font-semibold text-emerald-600">
+                  <ArrowUpRight className="h-3.5 w-3.5" />
                   {stat.change}
                 </div>
               </div>

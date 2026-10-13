@@ -1,69 +1,135 @@
 "use server";
-import { connectDB } from "@/lib/db";
-import { Order } from "@/models/Order";
-import { Customer } from "@/models/Customer";
+import { db } from "@/lib/firebase";
 import { revalidatePath } from "next/cache";
 
-// Fetch all customers (merging Customer model with Order stats)
+// Fetch all customers (merging customer documents with order statistics)
 export async function getCustomers() {
-  await connectDB();
-  
-  const baseCustomers = await Customer.find({}).lean();
-  
-  const stats = await Order.aggregate([
-    {
-      $group: {
-        _id: "$customerName",
-        totalOrders: { $sum: 1 },
-        totalPaid: { $sum: "$advancePaid" },
-        totalAmount: { $sum: "$totalAmount" },
-        lastVisit: { $max: "$createdAt" },
-        latestOrderId: { $first: "$_id" },
-        items: { $push: "$items" },
-        payments: { $push: { step: "$paymentStep", amount: "$advancePaid", date: "$createdAt" } }
-      }
-    },
-    { $sort: { lastVisit: -1 } }
+  const [customersSnap, ordersSnap] = await Promise.all([
+    db.collection("customers").get(),
+    db.collection("orders").get(),
   ]);
 
-  const merged = baseCustomers.map(bc => {
-    const s = stats.find(item => item._id === bc.name) || {
-      totalOrders: 0,
-      totalPaid: 0,
-      totalAmount: 0,
-      lastVisit: bc.createdAt,
-      latestOrderId: null,
-      items: [],
-      payments: []
-    };
-    
-    const allItems = s.items.flat().map((item: any) => {
-      if (typeof item === 'string') return { name: item, price: 0 };
-      return { name: item.name || 'Unknown Item', price: item.price || 0 };
+  // Group orders by customerName
+  const ordersByCustomer = new Map<string, any[]>();
+  ordersSnap.forEach((doc) => {
+    const data = doc.data();
+    const order = { id: doc.id, _id: doc.id, ...data };
+    const name = data.customerName;
+    if (!name) return;
+    if (!ordersByCustomer.has(name)) {
+      ordersByCustomer.set(name, []);
+    }
+    ordersByCustomer.get(name)!.push(order);
+  });
+
+  // Collect registered customers
+  const customersList: any[] = [];
+  const registeredNames = new Set<string>();
+
+  customersSnap.forEach((doc) => {
+    const data = doc.data();
+    const name = data.name || doc.id;
+    registeredNames.add(name);
+    customersList.push({
+      _id: name,
+      id: doc.id,
+      name: name,
+      phone: data.phone || "",
+      createdAt: data.createdAt || new Date().toISOString(),
     });
-    
-    const uniqueItems = Array.from(new Map(allItems.map((item: any) => [item.name, item])).values());
+  });
+
+  // Also include customers who have placed orders but weren't separately added to customers collection
+  for (const [name, orders] of ordersByCustomer.entries()) {
+    if (!registeredNames.has(name)) {
+      registeredNames.add(name);
+      customersList.push({
+        _id: name,
+        id: name,
+        name: name,
+        phone: orders[0]?.customerPhone || "",
+        createdAt: orders[0]?.createdAt || new Date().toISOString(),
+      });
+    }
+  }
+
+  const merged = customersList.map((customer) => {
+    const orders = ordersByCustomer.get(customer.name) || [];
+
+    // Sort orders descending by createdAt
+    orders.sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
+    const totalOrders = orders.length;
+    const totalPaid = orders.reduce((sum, o) => sum + (Number(o.advancePaid) || 0), 0);
+    const totalAmount = orders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+    const lastVisit = orders[0]?.createdAt || customer.createdAt;
+    const latestOrderId = orders[0]?._id || null;
+
+    const allItems: { name: string; price: number }[] = [];
+    const payments: { step: number; amount: number; date: string }[] = [];
+
+    for (const order of orders) {
+      if (Array.isArray(order.items)) {
+        for (const item of order.items) {
+          if (typeof item === "string") {
+            allItems.push({ name: item, price: 0 });
+          } else if (item && typeof item === "object") {
+            allItems.push({ name: item.name || "Unknown Item", price: Number(item.price) || 0 });
+          }
+        }
+      }
+      payments.push({
+        step: Number(order.paymentStep) || 1,
+        amount: Number(order.advancePaid) || 0,
+        date: order.createdAt || new Date().toISOString(),
+      });
+    }
+
+    const uniqueItems = Array.from(new Map(allItems.map((item) => [item.name, item])).values());
 
     return {
-      _id: bc.name,
-      phone: bc.phone,
-      ...s,
-      purchasedProducts: uniqueItems
+      _id: customer.name,
+      phone: customer.phone,
+      totalOrders,
+      totalPaid,
+      totalAmount,
+      lastVisit,
+      latestOrderId,
+      items: allItems,
+      payments,
+      purchasedProducts: uniqueItems,
     };
   });
+
+  // Sort by lastVisit descending
+  merged.sort(
+    (a, b) => new Date(b.lastVisit || 0).getTime() - new Date(a.lastVisit || 0).getTime()
+  );
 
   return JSON.parse(JSON.stringify(merged));
 }
 
 export async function createCustomer(formData: FormData) {
   try {
-    await connectDB();
-    const name = formData.get("name") as string;
-    const phone = formData.get("phone") as string;
+    const name = (formData.get("name") as string)?.trim();
+    const phone = (formData.get("phone") as string)?.trim() || "";
 
     if (!name) throw new Error("Name is required");
 
-    await Customer.create({ name, phone });
+    // Check if customer with this name already exists
+    const existing = await db.collection("customers").where("name", "==", name).limit(1).get();
+    if (!existing.empty) {
+      throw new Error(`Customer with name "${name}" already exists`);
+    }
+
+    await db.collection("customers").add({
+      name,
+      phone,
+      createdAt: new Date().toISOString(),
+    });
+
     revalidatePath("/customers");
     return { success: true };
   } catch (error: any) {
@@ -73,8 +139,13 @@ export async function createCustomer(formData: FormData) {
 
 export async function deleteCustomer(name: string) {
   try {
-    await connectDB();
-    await Customer.deleteOne({ name });
+    const snap = await db.collection("customers").where("name", "==", name).get();
+    const batch = db.batch();
+    snap.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+
     revalidatePath("/customers");
     return { success: true };
   } catch (error: any) {
@@ -83,53 +154,101 @@ export async function deleteCustomer(name: string) {
 }
 
 export async function getCustomerByName(name: string) {
-  await connectDB();
-  const customer = await Customer.findOne({ name }).lean();
-  if (!customer) return null;
-
-  const stats = await Order.aggregate([
-    { $match: { customerName: name } },
-    {
-      $group: {
-        _id: "$customerName",
-        totalOrders: { $sum: 1 },
-        totalPaid: { $sum: "$advancePaid" },
-        totalAmount: { $sum: "$totalAmount" },
-        items: { $push: "$items" },
-        latestPaymentStep: { $max: "$paymentStep" },
-        payments: { $push: { step: "$paymentStep", amount: "$advancePaid", date: "$createdAt" } }
-      }
-    }
+  const [customerSnap, ordersSnap] = await Promise.all([
+    db.collection("customers").where("name", "==", name).limit(1).get(),
+    db.collection("orders").where("customerName", "==", name).get(),
   ]);
 
-  const s = stats[0] || { totalOrders: 0, totalPaid: 0, totalAmount: 0, items: [], latestPaymentStep: 0, payments: [] };
-  const allItems = s.items.flat().map((item: any) => {
-    if (typeof item === 'string') return { name: item, price: 0 };
-    return { name: item.name || 'Unknown Item', price: item.price || 0 };
+  let customerData: any = null;
+  if (!customerSnap.empty) {
+    const doc = customerSnap.docs[0];
+    customerData = { _id: name, id: doc.id, ...doc.data() };
+  }
+
+  const orders: any[] = [];
+  ordersSnap.forEach((doc) => {
+    orders.push({ _id: doc.id, id: doc.id, ...doc.data() });
   });
 
-  // Deduplicate by name
-  const uniqueItems = Array.from(new Map(allItems.map((item: any) => [item.name, item])).values());
+  if (!customerData && orders.length === 0) {
+    return null;
+  }
 
-  return JSON.parse(JSON.stringify({
-    ...customer,
-    ...s,
-    purchasedProducts: uniqueItems,
-    balance: s.totalAmount - s.totalPaid
-  }));
+  if (!customerData) {
+    customerData = {
+      _id: name,
+      name,
+      phone: orders[0]?.customerPhone || "",
+      createdAt: orders[0]?.createdAt || new Date().toISOString(),
+    };
+  }
+
+  orders.sort(
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  );
+
+  const totalOrders = orders.length;
+  const totalPaid = orders.reduce((sum, o) => sum + (Number(o.advancePaid) || 0), 0);
+  const totalAmount = orders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+  const allItems: { name: string; price: number }[] = [];
+  const payments: { step: number; amount: number; date: string }[] = [];
+  let latestPaymentStep = 0;
+
+  for (const order of orders) {
+    const stepNum = Number(order.paymentStep) || 1;
+    if (stepNum > latestPaymentStep) {
+      latestPaymentStep = stepNum;
+    }
+    if (Array.isArray(order.items)) {
+      for (const item of order.items) {
+        if (typeof item === "string") {
+          allItems.push({ name: item, price: 0 });
+        } else if (item && typeof item === "object") {
+          allItems.push({ name: item.name || "Unknown Item", price: Number(item.price) || 0 });
+        }
+      }
+    }
+    payments.push({
+      step: stepNum,
+      amount: Number(order.advancePaid) || 0,
+      date: order.createdAt || new Date().toISOString(),
+    });
+  }
+
+  const uniqueItems = Array.from(new Map(allItems.map((item) => [item.name, item])).values());
+
+  return JSON.parse(
+    JSON.stringify({
+      ...customerData,
+      totalOrders,
+      totalPaid,
+      totalAmount,
+      items: allItems,
+      latestPaymentStep,
+      payments,
+      purchasedProducts: uniqueItems,
+      balance: totalAmount - totalPaid,
+    })
+  );
 }
 
 // Action to update payment (Edit Advance to Full)
 export async function updateCustomerPayment(orderId: string, amount: number) {
-  await connectDB();
-  const order = await Order.findById(orderId);
-  if (!order) throw new Error("Order not found");
+  const docRef = db.collection("orders").doc(orderId);
+  const doc = await docRef.get();
+  if (!doc.exists) throw new Error("Order not found");
 
-  order.advancePaid = amount;
-  if (order.advancePaid >= order.totalAmount) {
-    order.status = "COMPLETED";
-  }
-  
-  await order.save();
+  const orderData = doc.data() as any;
+  const advancePaid = Number(amount) || 0;
+  const totalAmount = Number(orderData.totalAmount) || 0;
+  const status = advancePaid >= totalAmount ? "COMPLETED" : "PARTIAL";
+
+  await docRef.update({
+    advancePaid,
+    status,
+  });
+
   revalidatePath("/customers");
+  revalidatePath("/orders");
 }

@@ -1,34 +1,47 @@
-import { connectDB } from "@/lib/db";
-import { Order } from "@/models/Order";
+import { db } from "@/lib/firebase";
 import { NextResponse } from "next/server";
 
 // GET: Fetch all orders for the Order History page
 export async function GET() {
   try {
-    await connectDB();
-    const orders = await Order.find({}).sort({ createdAt: -1 });
+    const snapshot = await db.collection("orders").get();
+    const orders = snapshot.docs
+      .map((doc) => ({
+        _id: doc.id,
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
     return NextResponse.json(orders);
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
+  } catch (error: any) {
+    console.error("Error fetching orders:", error);
+    return NextResponse.json({ error: error.message || "Failed to fetch orders" }, { status: 500 });
   }
 }
 
 // POST: Create a new billing record (from POS)
 export async function POST(req: Request) {
   try {
-    await connectDB();
     const body = await req.json();
-    
-    // Logic: Determine status based on payment
-    const status = body.advancePaid >= body.totalAmount ? "COMPLETED" : "PARTIAL";
-    
-    const newOrder = await Order.create({
+    const totalAmount = Number(body.totalAmount) || 0;
+    const advancePaid = Number(body.advancePaid) || 0;
+    const status = advancePaid >= totalAmount ? "COMPLETED" : "PARTIAL";
+
+    const newOrderData = {
       ...body,
-      status: status
-    });
-    
-    return NextResponse.json(newOrder, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
+      totalAmount,
+      advancePaid,
+      paymentStep: Number(body.paymentStep) || 1,
+      status,
+      createdAt: body.createdAt || new Date().toISOString(),
+    };
+
+    const docRef = await db.collection("orders").add(newOrderData);
+
+    return NextResponse.json({ _id: docRef.id, id: docRef.id, ...newOrderData }, { status: 201 });
+  } catch (error: any) {
+    console.error("Error creating order:", error);
+    return NextResponse.json({ error: error.message || "Failed to create order" }, { status: 500 });
   }
 }

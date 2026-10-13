@@ -26,6 +26,17 @@ function OrderContent() {
   const [totalSteps, setTotalSteps] = useState(3);
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [showReceipt, setShowReceipt] = useState(false);
+  const [lastReceipt, setLastReceipt] = useState<{
+    customer: string;
+    phone: string;
+    items: any[];
+    totalAmount: number;
+    paidAmount: number;
+    balanceDue: number;
+    step: number;
+    billNo: string;
+    date: string;
+  } | null>(null);
 
   useEffect(() => {
     const name = searchParams.get("name");
@@ -89,6 +100,23 @@ function OrderContent() {
 
     if (result.success) {
       const remainingBalance = grandTotal - paymentAmount;
+
+      const finalItems = cart.length > 0 ? [...cart] : (customerData?.purchasedProducts || []);
+      const orderTotal = cartTotal > 0 ? (cartTotal + previousBalance) : (customerData?.totalAmount || paymentAmount);
+      const paid = paymentAmount;
+      const balance = Math.max(0, remainingBalance);
+
+      setLastReceipt({
+        customer: customer || (customerData?._id) || "Valued Customer",
+        phone: customerPhone || (customerData?.phone) || "",
+        items: finalItems,
+        totalAmount: orderTotal,
+        paidAmount: paid,
+        balanceDue: balance,
+        step: step,
+        billNo: `#GS-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toLocaleDateString(),
+      });
       
       if (remainingBalance <= 0) {
         alert("Transaction Fully Completed!");
@@ -330,80 +358,92 @@ function OrderContent() {
 
       {/* RECEIPT MODAL */}
       <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
-        <DialogContent className="max-w-md">
-          <div className="p-8 bg-white text-slate-900 space-y-6 font-serif">
-            <div className="text-center border-b pb-4">
-              <div className="flex justify-center mb-2">
-                <img src="/logo.jpg" alt="Logo" className="h-16 w-auto" />
+        <DialogContent className="max-w-lg">
+          <div className="p-6 md:p-8 bg-white text-slate-900 space-y-6 font-sans">
+            {/* Header */}
+            <div className="text-center border-b border-slate-200 pb-5">
+              <div className="flex justify-center mb-3">
+                <img src="/logo.jpg" alt="Godage Studio Logo" className="h-16 w-auto object-contain" />
               </div>
-              <h2 className="text-2xl font-black uppercase tracking-widest">Godage Studio</h2>
-              <p className="text-[10px] text-slate-500 italic">Professional Photography & Videography</p>
-            </div>
-
-            <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400">
-              <div>
-                <p>Customer: <span className="text-slate-900">{customer || (customerData?._id)}</span></p>
-                <p>Phone: <span className="text-slate-900">{customerPhone || (customerData?.phone)}</span></p>
-              </div>
-              <div className="text-right">
-                <p>Date: {new Date().toLocaleDateString()}</p>
-                <p>Bill No: #GS-{Math.floor(1000 + Math.random() * 9000)}</p>
+              <h2 className="text-2xl md:text-3xl font-black uppercase tracking-wider text-slate-900">Godage Studio</h2>
+              <p className="text-xs md:text-sm text-slate-600 font-medium mt-0.5">Professional Photography &amp; Videography</p>
+              <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-900 font-bold text-xs md:text-sm">
+                <span>📞 Hotline / WhatsApp:</span>
+                <span className="text-blue-700 font-black tracking-wide">0715926263</span>
               </div>
             </div>
 
-            <table className="w-full text-[10px] border-t pt-4">
+            {/* Customer & Invoice Details */}
+            <div className="grid grid-cols-2 gap-4 text-xs md:text-sm bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+              <div className="space-y-1">
+                <p className="text-slate-500 uppercase text-[11px] font-bold">Customer Name</p>
+                <p className="text-slate-900 font-bold text-sm md:text-base">{lastReceipt?.customer || customer || (customerData?._id) || "Customer"}</p>
+                <p className="text-slate-600 text-xs md:text-sm">Phone: {lastReceipt?.phone || customerPhone || (customerData?.phone) || "N/A"}</p>
+              </div>
+              <div className="space-y-1 text-right">
+                <p className="text-slate-500 uppercase text-[11px] font-bold">Invoice Details</p>
+                <p className="text-slate-900 font-bold text-sm md:text-base">{lastReceipt?.billNo || `#GS-1001`}</p>
+                <p className="text-slate-600 text-xs md:text-sm">Date: {lastReceipt?.date || new Date().toLocaleDateString()}</p>
+              </div>
+            </div>
+
+            {/* Items Table */}
+            <table className="w-full text-xs md:text-sm border-t border-slate-200 pt-3">
               <thead>
-                <tr className="border-b text-slate-400 uppercase font-bold">
-                  <th className="text-left py-1">Item</th>
-                  <th className="text-right py-1">Price</th>
+                <tr className="border-b-2 border-slate-900 text-slate-900 uppercase font-bold text-xs md:text-sm">
+                  <th className="text-left py-2.5">Service / Item</th>
+                  <th className="text-right py-2.5">Price (Rs.)</th>
                 </tr>
               </thead>
               <tbody>
-                {/* PREVIOUS ITEMS */}
-                {customerData?.purchasedProducts?.map((p: any, i: number) => (
-                  <tr key={`prev-${i}`} className="border-b border-slate-50 opacity-60">
-                    <td className="py-1">{p.name}</td>
-                    <td className="text-right py-1">Rs. {p.price}</td>
-                  </tr>
-                ))}
-                {/* CURRENT CART ITEMS */}
-                {cart.map((p: any, i: number) => (
-                  <tr key={`curr-${i}`} className="border-b border-slate-50 font-bold">
-                    <td className="py-1">{p.name}</td>
-                    <td className="text-right py-1">Rs. {p.price}</td>
+                {(lastReceipt?.items && lastReceipt.items.length > 0 ? lastReceipt.items : cart).map((p: any, i: number) => (
+                  <tr key={i} className="border-b border-slate-100 font-medium">
+                    <td className="py-2.5 text-slate-800 text-xs md:text-sm">{p.name}</td>
+                    <td className="text-right py-2.5 font-bold text-slate-900 text-xs md:text-sm">Rs. {Number(p.price).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            <div className="space-y-2 pt-4 border-t-2 border-slate-900">
-              <div className="flex justify-between text-sm font-black">
-                <span>Current Total Amount</span>
-                <span>Rs. {cartTotal + (customerData?.balance || 0)}</span>
-              </div>
-              
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase text-slate-400">Transaction History</p>
-                {customerData?.payments?.sort((a: any, b: any) => a.step - b.step).map((p: any, i: number) => (
-                  <div key={i} className="flex justify-between text-[10px]">
-                    <span>Step {p.step} Payment</span>
-                    <span>Rs. {p.amount}</span>
-                  </div>
-                ))}
+            {/* Financial Summary */}
+            <div className="space-y-2.5 pt-4 border-t-2 border-slate-900">
+              <div className="flex justify-between text-base md:text-lg font-black text-slate-900">
+                <span>Total Amount</span>
+                <span>Rs. {Number(lastReceipt?.totalAmount ?? (cartTotal + (customerData?.balance || 0))).toLocaleString()}</span>
               </div>
 
-              <div className="flex justify-between text-sm font-black pt-2 border-t border-dashed border-slate-300">
-                <span>Final Balance Due</span>
-                <span className="text-red-600">Rs. {Math.max(0, (cartTotal + (customerData?.balance || 0)) - paymentAmount)}</span>
+              <div className="flex justify-between text-sm md:text-base font-bold text-slate-800">
+                <span>Paid Amount</span>
+                <span className="text-emerald-700 font-black">Rs. {Number(lastReceipt?.paidAmount ?? paymentAmount).toLocaleString()}</span>
+              </div>
+
+              <div className="flex justify-between text-base md:text-lg font-black pt-2 border-t border-dashed border-slate-300">
+                <span>Balance Due</span>
+                <span className={Number(lastReceipt?.balanceDue ?? 0) > 0 ? "text-red-600 font-black" : "text-emerald-700 font-black"}>
+                  Rs. {Number(lastReceipt?.balanceDue ?? Math.max(0, (cartTotal + (customerData?.balance || 0)) - paymentAmount)).toLocaleString()}
+                </span>
               </div>
             </div>
 
-            <div className="text-center pt-8 border-t">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600">Step {step} Completed</p>
-              <p className="text-[8px] uppercase tracking-tighter text-slate-400 mt-2">Thank you for choosing Godage Studio!</p>
+            {/* Footer */}
+            <div className="text-center pt-6 border-t border-slate-200 space-y-2">
+              {(lastReceipt ? lastReceipt.balanceDue <= 0 : (cartTotal + (customerData?.balance || 0) - paymentAmount <= 0)) ? (
+                <p className="text-xs md:text-sm font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 py-1.5 px-4 rounded-full inline-block">
+                  ✓ Full Payment Completed
+                </p>
+              ) : (
+                <p className="text-xs md:text-sm font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 py-1.5 px-4 rounded-full inline-block">
+                  Next Step Balance: Rs. {Number(lastReceipt?.balanceDue ?? Math.max(0, (cartTotal + (customerData?.balance || 0)) - paymentAmount)).toLocaleString()}
+                </p>
+              )}
+              <p className="text-xs text-slate-500 font-medium">
+                Thank you for choosing Godage Studio! • For inquiries call 0715926263
+              </p>
             </div>
           </div>
-          <Button className="w-full" onClick={() => window.print()}>Print Receipt</Button>
+          <Button className="w-full text-sm md:text-base py-5 font-bold bg-blue-600 hover:bg-blue-700" onClick={() => window.print()}>
+            Print Receipt
+          </Button>
         </DialogContent>
       </Dialog>
     </div>
