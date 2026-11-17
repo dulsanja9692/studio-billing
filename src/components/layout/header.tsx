@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 export default function Header() {
   return (
     <header className="h-16 border-b bg-white px-6 flex items-center justify-between sticky top-0 z-10">
-      {/* Left Side: Logo & Name */}
-      <div className="flex items-center gap-3">
+      {/* Mobile-only Logo (hidden on desktop because sidebar already displays logo) */}
+      <div className="flex md:hidden items-center gap-3">
         <Image 
           src="/logo.jpg" 
           alt="Godage Studio Logo" 
@@ -16,7 +16,7 @@ export default function Header() {
           style={{ height: "auto" }}
           className="rounded-sm object-contain shrink-0"
         />
-        <div className="hidden md:block">
+        <div>
           <h1 className="text-sm font-bold tracking-tight text-slate-900 leading-none">GODAGE STUDIO</h1>
           <p className="text-[10px] text-slate-500 font-medium mt-1 uppercase">Management System</p>
         </div>
