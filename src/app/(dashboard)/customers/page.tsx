@@ -38,11 +38,31 @@ export default function CustomersPage() {
   const fetch = async () => {
     try {
       setTableError(null);
+      const res = await window.fetch("/api/customers", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setCustomers(data);
+          return;
+        }
+      }
+      // Fallback to server action
       const data = await getCustomers();
-      setCustomers(data);
+      if (Array.isArray(data)) {
+        setCustomers(data);
+      }
     } catch (err: any) {
-      console.error("Failed to fetch customers:", err);
-      setTableError(err.message || "Failed to load customers list. Please check your database connection.");
+      console.warn("API fetch error, trying server action:", err);
+      try {
+        const data = await getCustomers();
+        if (Array.isArray(data)) {
+          setCustomers(data);
+          return;
+        }
+      } catch (fallbackErr: any) {
+        console.error("Failed to fetch customers:", fallbackErr);
+        setTableError("Failed to load customers list. Please check your internet connection.");
+      }
     }
   };
 
