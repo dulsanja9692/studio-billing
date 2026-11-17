@@ -30,17 +30,19 @@ export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [tableError, setTableError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<string>("");
   const [isUpdatingPayment, setIsUpdatingPayment] = useState<string | null>(null);
 
   const fetch = async () => {
     try {
+      setTableError(null);
       const data = await getCustomers();
       setCustomers(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch customers:", err);
-      setError("Failed to load customers list.");
+      setTableError(err.message || "Failed to load customers list. Please check your database connection.");
     }
   };
 
@@ -51,16 +53,17 @@ export default function CustomersPage() {
   const handleSaveCustomer = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
+    setFormError(null);
 
     const formData = new FormData(e.currentTarget);
     const result = await createCustomer(formData);
 
     if (result.success) {
       setIsAdding(false);
+      setFormError(null);
       fetch();
     } else {
-      setError(result.error || "Failed to save customer");
+      setFormError(result.error || "Failed to save customer");
     }
     setLoading(false);
   };
@@ -105,7 +108,7 @@ export default function CustomersPage() {
         <h2 className="text-2xl font-bold">Customer Directory</h2>
         
         {/* ADD CUSTOMER POPUP */}
-        <Dialog open={isAdding} onOpenChange={setIsAdding}>
+        <Dialog open={isAdding} onOpenChange={(open) => { setIsAdding(open); if (open) setFormError(null); }}>
           <DialogTrigger render={<Button className="bg-blue-600 hover:bg-blue-700" />}>
             <UserPlus className="mr-2 h-4 w-4" /> Add New Customer
           </DialogTrigger>
@@ -114,7 +117,7 @@ export default function CustomersPage() {
               <DialogTitle>Add Customer Information</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSaveCustomer} className="space-y-4 py-4">
-              {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-100">{error}</p>}
+              {formError && <p className="text-sm text-red-600 bg-red-50 p-2.5 rounded-md border border-red-200">{formError}</p>}
               <Input name="name" placeholder="Customer Full Name" required />
               <Input name="phone" placeholder="Phone Number" />
               <Button type="submit" disabled={loading} className="w-full">
@@ -125,6 +128,15 @@ export default function CustomersPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {tableError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-center justify-between">
+          <p className="text-sm">{tableError}</p>
+          <Button variant="outline" size="sm" onClick={() => fetch()} className="border-red-300 text-red-700 hover:bg-red-100">
+            Retry Connection
+          </Button>
+        </div>
+      )}
 
       {/* SEARCH BAR */}
       <div className="relative">

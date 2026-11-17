@@ -13,23 +13,25 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [isViewOnly, setIsViewOnly] = useState(false);
 
-  const [error, setError] = useState<string | null>(null);
+  const [tableError, setTableError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Fetch products from database
   const fetchProducts = async () => {
     try {
+      setTableError(null);
       const res = await fetch('/api/products', { cache: 'no-store' });
       const data = await res.json();
       if (Array.isArray(data)) {
         setProducts(data);
-        setError(null);
+        setTableError(null);
       } else {
         setProducts([]);
-        setError(data.error || "Failed to load products");
+        setTableError(data.error || "Failed to load products");
       }
     } catch (err) {
-      setError("Network error: Could not connect to server");
+      setTableError("Network error: Could not connect to server. Please check database connection.");
       setProducts([]);
     }
   };
@@ -69,7 +71,7 @@ export default function ProductsPage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
+    setFormError(null);
 
     try {
       const formData = new FormData(e.currentTarget);
@@ -94,12 +96,13 @@ export default function ProductsPage() {
       if (res.ok) {
         setIsAdding(false);
         setEditingProduct(null);
+        setFormError(null);
         fetchProducts();
       } else {
-        setError(result.error || "Failed to save item");
+        setFormError(result.error || "Failed to save item");
       }
-    } catch (err) {
-      setError("Network error: Could not save item");
+    } catch (err: any) {
+      setFormError("Network error: Could not save item. Ensure the server is running and internet is connected.");
     } finally {
       setLoading(false);
     }
@@ -115,6 +118,7 @@ export default function ProductsPage() {
 
         <Dialog open={isAdding} onOpenChange={(open) => {
           setIsAdding(open);
+          if (open) setFormError(null);
           if (!open) {
             setEditingProduct(null);
             setIsViewOnly(false);
@@ -130,10 +134,10 @@ export default function ProductsPage() {
               </DialogTitle>
             </DialogHeader>
             <form className="space-y-4 py-4" onSubmit={handleSubmit}>
-              {error && (
-                <div className="p-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg flex items-center gap-2">
-                   <AlertCircle className="h-4 w-4" />
-                   {error}
+              {formError && (
+                <div className="p-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+                   <AlertCircle className="h-4 w-4 shrink-0" />
+                   <span>{formError}</span>
                 </div>
               )}
               <div className="space-y-2">
@@ -159,6 +163,15 @@ export default function ProductsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {tableError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-center justify-between">
+          <p className="text-sm">{tableError}</p>
+          <Button variant="outline" size="sm" onClick={() => fetchProducts()} className="border-red-300 text-red-700 hover:bg-red-100">
+            Retry Connection
+          </Button>
+        </div>
+      )}
 
       <Card>
         <Table>
