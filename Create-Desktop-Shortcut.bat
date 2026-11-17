@@ -2,23 +2,25 @@
 title Creating Desktop Shortcut...
 cd /d "%~dp0"
 
+echo ========================================================
+echo        GODAGE STUDIO - DESKTOP SHORTCUT CREATOR
+echo ========================================================
+echo.
 echo Creating Desktop shortcut for Godage Studio Billing...
+echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$ws = New-Object -ComObject WScript.Shell; ^
-   $desktop = [Environment]::GetFolderPath('Desktop'); ^
-   $s = $ws.CreateShortcut(\"$desktop\Godage Studio Billing.lnk\"); ^
-   $s.TargetPath = \"$((Get-Item .).FullName)\Start-Billing-System.bat\"; ^
-   $s.WorkingDirectory = \"$((Get-Item .).FullName)\"; ^
-   $s.Description = \"Launch Godage Studio Billing System\"; ^
-   $s.Save();"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0create-shortcut.ps1"
 
 if %errorlevel% equ 0 (
     echo.
+    echo ========================================================
     echo [SUCCESS] Shortcut "Godage Studio Billing" created on your Desktop!
     echo You can now double-click it directly from your Desktop to start the app.
+    echo ========================================================
 ) else (
-    echo [ERROR] Could not create shortcut. You can right-click Start-Billing-System.bat and choose "Send to > Desktop".
+    echo.
+    echo [ERROR] Could not create shortcut automatically.
+    echo Alternative: Right-click "Start-Billing-System.bat" and select "Send to > Desktop (create shortcut)".
 )
 
 echo.
