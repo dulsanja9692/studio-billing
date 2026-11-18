@@ -92,8 +92,10 @@ function OrderContent() {
     const paid = Number(paymentAmount) || 0;
     const currentOrderTotal = cartTotal;
     const remainingBalance = Math.max(0, currentOrderTotal - paid);
+    const currentBillNo = `#GS-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const result = await createStepOrder({
+      billNo: currentBillNo,
       customerName: customer,
       customerPhone: customerPhone,
       items: cart,
@@ -111,7 +113,7 @@ function OrderContent() {
         paidAmount: paid,
         balanceDue: remainingBalance,
         step: step,
-        billNo: `#GS-${Math.floor(1000 + Math.random() * 9000)}`,
+        billNo: currentBillNo,
         date: new Date().toLocaleDateString(),
       });
       

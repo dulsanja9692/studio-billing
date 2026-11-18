@@ -6,11 +6,16 @@ export async function GET() {
   try {
     const snapshot = await db.collection("orders").get();
     const orders = snapshot.docs
-      .map((doc) => ({
-        _id: doc.id,
-        id: doc.id,
-        ...doc.data(),
-      }))
+      .map((doc) => {
+        const data = doc.data();
+        const fallbackBillNo = `#GS-${doc.id.slice(0, 5).toUpperCase()}`;
+        return {
+          _id: doc.id,
+          id: doc.id,
+          billNo: data.billNo || fallbackBillNo,
+          ...data,
+        };
+      })
       .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
     return NextResponse.json(orders);
@@ -27,9 +32,11 @@ export async function POST(req: Request) {
     const totalAmount = Number(body.totalAmount) || 0;
     const advancePaid = Number(body.advancePaid) || 0;
     const status = advancePaid >= totalAmount ? "COMPLETED" : "PARTIAL";
+    const billNo = (body.billNo || `#GS-${Math.floor(1000 + Math.random() * 9000)}`).toUpperCase();
 
     const newOrderData = {
       ...body,
+      billNo,
       totalAmount,
       advancePaid,
       paymentStep: Number(body.paymentStep) || 1,

@@ -22,15 +22,26 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Middle: Search Bar (Optional but looks professional) */}
-      <div className="hidden sm:flex relative w-64">
+      {/* Middle: Quick Search by Bill # or Customer */}
+      <form 
+        onSubmit={(e) => {
+          e.preventDefault();
+          const input = e.currentTarget.elements.namedItem("search") as HTMLInputElement;
+          const query = input?.value?.trim();
+          if (query) {
+            window.location.href = `/orders?q=${encodeURIComponent(query)}`;
+          }
+        }}
+        className="hidden sm:flex relative w-72"
+      >
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
         <Input 
+          name="search"
           type="search" 
-          placeholder="Search customers..." 
-          className="pl-9 bg-slate-50 border-slate-200 h-9 text-sm focus-visible:ring-blue-600" 
+          placeholder="Search by Bill # or Customer..." 
+          className="pl-9 bg-slate-50 border-slate-200 h-9 text-xs focus-visible:ring-blue-600" 
         />
-      </div>
+      </form>
 
       {/* Right Side: Notifications & Profile */}
       <div className="flex items-center gap-4">

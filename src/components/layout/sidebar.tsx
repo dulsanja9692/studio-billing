@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, ShoppingCart, Package, LogOut } from "lucide-react";
+import { Home, Users, ShoppingCart, Package, LogOut, FileText } from "lucide-react";
 import { logoutAction } from "@/lib/actions/authActions";
 
 export default function Sidebar() {
@@ -21,6 +21,7 @@ export default function Sidebar() {
       label: "Sales",
       items: [
         { name: "POS", href: "/pos", icon: ShoppingCart },
+        { name: "Invoices & History", href: "/orders", icon: FileText },
         { name: "Products", href: "/Product", icon: Package },
       ],
     },

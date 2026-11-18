@@ -20,8 +20,10 @@ export async function createStepOrder(orderData: any) {
   const paymentStep = Number(orderData.currentStep) || 1;
   const customerName = (orderData.customerName || "").trim();
   const customerPhone = (orderData.customerPhone || "").trim();
+  const billNo = (orderData.billNo || `#GS-${Math.floor(1000 + Math.random() * 9000)}`).toUpperCase();
 
   const newOrder = {
+    billNo,
     customerName,
     customerPhone,
     items: orderData.items || [],
@@ -32,7 +34,7 @@ export async function createStepOrder(orderData: any) {
     createdAt: new Date().toISOString(),
   };
 
-  await db.collection("orders").add(newOrder);
+  const docRef = await db.collection("orders").add(newOrder);
 
   // If customer name is provided, ensure customer is registered in customers collection
   if (customerName) {
@@ -58,5 +60,5 @@ export async function createStepOrder(orderData: any) {
 
   revalidatePath("/customers");
   revalidatePath("/orders");
-  return { success: true };
+  return { success: true, billNo, orderId: docRef.id };
 }
