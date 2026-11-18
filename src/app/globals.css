@@ -132,7 +132,7 @@
 }
 
 /* =========================================================
-   A5 PROFESSIONAL STUDIO RECEIPT PRINT STYLES
+   A5 STUDIO RECEIPT PRINT STYLES (PRINTING PURPOSE ONLY)
    ========================================================= */
 @page {
   size: A5 portrait;
@@ -142,32 +142,64 @@
 @media print {
   html, body {
     width: 100% !important;
-    height: 100% !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
     color: #0f172a !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hide everything outside the receipt */
-  body * {
+  /* Reset dialog / modal wrappers so they don't clip or center on the print page */
+  [data-slot="dialog-portal"],
+  [data-slot="dialog-overlay"],
+  [data-slot="dialog-content"],
+  [role="dialog"] {
+    position: static !important;
+    transform: none !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    display: block !important;
+  }
+
+  /* Hide background elements and navigation */
+  aside,
+  header,
+  nav,
+  footer,
+  .no-print,
+  button,
+  [data-slot="dialog-close"],
+  [data-radix-focus-guard] {
+    display: none !important;
     visibility: hidden !important;
   }
 
-  /* Only make the receipt and its children visible */
-  #printable-receipt,
-  #printable-receipt * {
-    visibility: visible !important;
-  }
-
+  /* Ensure the printable receipt is visible and expands completely */
   #printable-receipt {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    display: block !important;
+    visibility: visible !important;
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
     width: 100% !important;
-    max-width: 135mm !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
     margin: 0 auto !important;
     padding: 0 !important;
     border: none !important;
@@ -175,11 +207,7 @@
     background: #ffffff !important;
   }
 
-  /* Hide buttons, dialog backdrops, scrollbars, etc. */
-  .no-print,
-  button,
-  [data-radix-focus-guard],
-  [role="dialog"] > button {
-    display: none !important;
+  #printable-receipt * {
+    visibility: visible !important;
   }
 }

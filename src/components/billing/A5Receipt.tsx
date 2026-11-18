@@ -53,9 +53,99 @@ export default function A5Receipt({
   const handlePrint = () => {
     if (onPrint) {
       onPrint();
-    } else {
-      window.print();
+      return;
     }
+
+    const receiptElement = document.getElementById("printable-receipt");
+    if (!receiptElement) {
+      window.print();
+      return;
+    }
+
+    // Collect all head stylesheets and styles for 100% pixel-perfect styling
+    const headStyles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((el) => el.outerHTML)
+      .join("\n");
+
+    // Remove any previous print iframe
+    const existingIframe = document.getElementById("receipt-print-frame");
+    if (existingIframe) {
+      existingIframe.remove();
+    }
+
+    // Create an isolated hidden iframe
+    const iframe = document.createElement("iframe");
+    iframe.id = "receipt-print-frame";
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Godage Studio - Invoice ${billNo || "Receipt"}</title>
+          ${headStyles}
+          <style>
+            @page {
+              size: A5 portrait;
+              margin: 6mm 8mm;
+            }
+            html, body {
+              width: 100% !important;
+              height: auto !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              color: #0f172a !important;
+              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .a5-print-wrapper {
+              width: 100% !important;
+              max-width: 100% !important;
+              margin: 0 auto !important;
+              padding: 0 !important;
+              border: none !important;
+              box-shadow: none !important;
+              background: #ffffff !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="a5-print-wrapper">
+            ${receiptElement.innerHTML}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    // Allow images and styles to parse before triggering print
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.error("Iframe print failed, falling back to window.print:", err);
+        window.print();
+      }
+      setTimeout(() => {
+        iframe.remove();
+      }, 3000);
+    }, 300);
   };
 
   return (
