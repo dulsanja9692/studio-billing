@@ -8,7 +8,7 @@ export interface A5ReceiptProps {
   date?: string;
   customerName: string;
   customerPhone?: string;
-  items?: Array<{ name: string; price: number }>;
+  items?: Array<{ name: string; price: number; qty?: number }>;
   subtotal?: number;
   discount?: {
     name: string;
@@ -53,15 +53,24 @@ export default function A5Receipt({
 
   // Build standalone A4 HTML template for printing
   const generateA4Html = () => {
-    const itemsRows = items && items.length > 0 ? items.map((item, idx) => `
+    const itemsRows = items && items.length > 0 ? items.map((item, idx) => {
+      const q = Number(item.qty) || 1;
+      const unitP = Number(item.price) || 0;
+      const lineTotal = unitP * q;
+      return `
       <tr style="border-bottom: 1px solid #e2e8f0;">
         <td style="padding: 10px 12px; font-family: monospace; color: #64748b; font-size: 13px;">${idx + 1}</td>
-        <td style="padding: 10px 12px; font-weight: 600; color: #0f172a; font-size: 14px;">${item.name}</td>
+        <td style="padding: 10px 12px; font-weight: 600; color: #0f172a; font-size: 14px;">
+          ${item.name}
+          ${q > 1 ? `<span style="display: inline-block; background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 4px; margin-left: 8px;">× ${q}</span>` : ""}
+          ${q > 1 ? `<div style="font-size: 11px; color: #64748b; font-weight: normal; margin-top: 2px;">Rs. ${unitP.toLocaleString()} each</div>` : ""}
+        </td>
         <td style="padding: 10px 12px; text-align: right; font-family: monospace; font-weight: 700; color: #0f172a; font-size: 14px;">
-          Rs. ${Number(item.price).toLocaleString()}
+          Rs. ${lineTotal.toLocaleString()}
         </td>
       </tr>
-    `).join("") : `
+      `;
+    }).join("") : `
       <tr style="border-bottom: 1px solid #e2e8f0;">
         <td style="padding: 12px; font-family: monospace; color: #64748b;">1</td>
         <td style="padding: 12px; font-weight: 600; color: #0f172a;">Studio Photography / Videography Services</td>
@@ -413,15 +422,32 @@ export default function A5Receipt({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {items && items.length > 0 ? (
-                items.map((item, index) => (
-                  <tr key={index} className="hover:bg-slate-50/50">
-                    <td className="py-2 px-3 text-slate-400 font-mono text-[11px]">{index + 1}</td>
-                    <td className="py-2 px-3 font-medium text-slate-900 text-xs">{item.name}</td>
-                    <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 text-xs">
-                      Rs. {Number(item.price).toLocaleString()}
-                    </td>
-                  </tr>
-                ))
+                items.map((item, index) => {
+                  const q = Number(item.qty) || 1;
+                  const unitP = Number(item.price) || 0;
+                  const lineTotal = unitP * q;
+                  return (
+                    <tr key={index} className="hover:bg-slate-50/50">
+                      <td className="py-2 px-3 text-slate-400 font-mono text-[11px]">{index + 1}</td>
+                      <td className="py-2 px-3 font-medium text-slate-900 text-xs">
+                        <span>{item.name}</span>
+                        {q > 1 && (
+                          <span className="ml-2 inline-block bg-slate-100 text-slate-900 border border-slate-300 text-[10px] font-black px-1.5 py-0.2 rounded">
+                            × {q}
+                          </span>
+                        )}
+                        {q > 1 && (
+                          <span className="block text-[10px] text-slate-400 font-normal">
+                            Rs. {unitP.toLocaleString()} each
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 text-xs">
+                        Rs. {lineTotal.toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">1</td>

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { 
   ShoppingCart, Trash2, CreditCard, ChevronRight, History, Printer, 
-  Search, Percent, Tag, CheckCircle2, AlertCircle, FileText, X
+  Search, Percent, Tag, CheckCircle2, AlertCircle, FileText, X, Plus, Minus
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { 
@@ -162,12 +162,58 @@ function OrderContent() {
 
   const categories = Array.from(new Set(products.map((p) => p.category)));
 
+  // Add item to cart or increment count if already exists
   const addToCart = (product: any) => {
-    setCart((prev) => [...prev, { ...product, cartId: `${product._id}-${Math.random()}` }]);
+    setCart((prev) => {
+      const existingIndex = prev.findIndex(
+        (item) => (item._id && item._id === product._id) || item.name === product.name
+      );
+      if (existingIndex > -1) {
+        const next = [...prev];
+        const currentQty = Number(next[existingIndex].qty) || 1;
+        next[existingIndex] = {
+          ...next[existingIndex],
+          qty: currentQty + 1,
+        };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          ...product,
+          cartId: `${product._id || product.name}-${Date.now()}-${Math.random()}`,
+          qty: 1,
+        },
+      ];
+    });
+  };
+
+  // Increment or decrement quantity
+  const updateItemQty = (cartId: string, delta: number) => {
+    setCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.cartId === cartId) {
+            const nextQty = (Number(item.qty) || 1) + delta;
+            return nextQty > 0 ? { ...item, qty: nextQty } : null;
+          }
+          return item;
+        })
+        .filter(Boolean) as any[]
+    );
+  };
+
+  // Remove specific item from cart
+  const removeItem = (cartId: string) => {
+    setCart((prev) => prev.filter((item) => item.cartId !== cartId));
   };
 
   const cartTotal = useMemo(() => {
-    return cart.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+    return cart.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
+  }, [cart]);
+
+  const totalItemCount = useMemo(() => {
+    return cart.reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
   }, [cart]);
 
   // Applicable discounts matching current customer
@@ -462,29 +508,47 @@ function OrderContent() {
               <TabsContent key={cat} value={cat} className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {products
                   .filter((p) => p.category === cat)
-                  .map((product) => (
-                    <Card 
-                      key={product._id} 
-                      className="cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all border-none shadow-sm hover:shadow bg-white"
-                      onClick={() => addToCart(product)}
-                    >
-                      <CardContent className="p-4 space-y-2 text-center">
-                        <p className="font-bold text-sm truncate text-slate-900">{product.name}</p>
-                        <p className="text-blue-600 font-black">Rs. {Number(product.price).toLocaleString()}</p>
-                        <Button 
-                          size="sm" 
-                          variant="secondary" 
-                          className="w-full text-[11px] h-7 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 font-semibold"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            addToCart(product);
-                          }}
-                        >
-                          + Add to Bill
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  .map((product) => {
+                    const inCart = cart.find(
+                      (i) => (i._id && i._id === product._id) || i.name === product.name
+                    );
+                    const inCartQty = inCart ? Number(inCart.qty) || 1 : 0;
+
+                    return (
+                      <Card 
+                        key={product._id} 
+                        className={`cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all border-none shadow-sm hover:shadow bg-white relative ${
+                          inCartQty > 0 ? "ring-2 ring-blue-500 bg-blue-50/20" : ""
+                        }`}
+                        onClick={() => addToCart(product)}
+                      >
+                        {inCartQty > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white font-black text-[11px] w-6 h-6 rounded-full flex items-center justify-center shadow-md border-2 border-white">
+                            {inCartQty}
+                          </span>
+                        )}
+                        <CardContent className="p-4 space-y-2 text-center">
+                          <p className="font-bold text-sm truncate text-slate-900">{product.name}</p>
+                          <p className="text-blue-600 font-black">Rs. {Number(product.price).toLocaleString()}</p>
+                          <Button 
+                            size="sm" 
+                            variant={inCartQty > 0 ? "default" : "secondary"}
+                            className={`w-full text-[11px] h-7 font-semibold ${
+                              inCartQty > 0 
+                                ? "bg-blue-600 text-white hover:bg-blue-700 shadow-xs" 
+                                : "bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700"
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addToCart(product);
+                            }}
+                          >
+                            {inCartQty > 0 ? `+ Add More (${inCartQty})` : "+ Add to Bill"}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
               </TabsContent>
             ))}
           </Tabs>
@@ -576,24 +640,85 @@ function OrderContent() {
                 </div>
               )}
 
-              {/* Cart Items List */}
-              <div className="max-h-[200px] overflow-auto space-y-2 py-2 border-y border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Current Order Items ({cart.length})</p>
-                {cart.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No items added to cart</p>}
-                {cart.map((item) => (
-                  <div key={item.cartId} className="flex justify-between items-center text-xs group py-1 border-b border-slate-50 last:border-none">
-                    <span className="truncate w-36 font-semibold text-slate-800">{item.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-600 font-mono font-medium">Rs.{Number(item.price).toLocaleString()}</span>
-                      <button 
-                        onClick={() => setCart(cart.filter(i => i.cartId !== item.cartId))}
-                        className="text-slate-300 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+              {/* Cart Items List with Quantity +/- Controls */}
+              <div className="max-h-[250px] overflow-auto space-y-2 py-2.5 border-y border-slate-100">
+                <div className="flex justify-between items-center pb-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Current Order Items ({totalItemCount})
+                  </p>
+                  {cart.length > 0 && (
+                    <button 
+                      type="button"
+                      onClick={() => setCart([])} 
+                      className="text-[10px] text-red-500 hover:underline font-semibold"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
+
+                {cart.length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-4">No items added to bill yet</p>
+                )}
+
+                {cart.map((item) => {
+                  const qty = Number(item.qty) || 1;
+                  const itemPrice = Number(item.price) || 0;
+                  const lineTotal = itemPrice * qty;
+
+                  return (
+                    <div 
+                      key={item.cartId} 
+                      className="flex items-center justify-between text-xs py-1.5 px-2 bg-slate-50/80 hover:bg-slate-50 rounded-lg border border-slate-100 transition-colors"
+                    >
+                      {/* Name & Unit Price */}
+                      <div className="min-w-0 flex-1 pr-2">
+                        <p className="font-bold text-slate-900 truncate text-xs">{item.name}</p>
+                        <p className="text-[10px] text-slate-500 font-mono">
+                          Rs. {itemPrice.toLocaleString()} {qty > 1 ? `× ${qty}` : ""}
+                        </p>
+                      </div>
+
+                      {/* Quantity Controls (- Qty +) */}
+                      <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-md px-1.5 py-0.5 shadow-2xs shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => updateItemQty(item.cartId, -1)}
+                          className="h-5 w-5 flex items-center justify-center rounded text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-bold transition-colors"
+                          title="Decrease quantity"
+                        >
+                          <Minus size={11} />
+                        </button>
+                        <span className="font-mono font-black text-xs min-w-[16px] text-center text-slate-900">
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateItemQty(item.cartId, 1)}
+                          className="h-5 w-5 flex items-center justify-center rounded text-blue-600 hover:bg-blue-50 font-bold transition-colors"
+                          title="Increase quantity"
+                        >
+                          <Plus size={11} />
+                        </button>
+                      </div>
+
+                      {/* Line Total & Remove */}
+                      <div className="flex items-center gap-2 pl-2.5 shrink-0">
+                        <span className="font-mono font-bold text-slate-900 min-w-[55px] text-right">
+                          Rs. {lineTotal.toLocaleString()}
+                        </span>
+                        <button 
+                          type="button"
+                          onClick={() => removeItem(item.cartId)}
+                          className="text-slate-300 hover:text-red-500 transition-colors"
+                          title="Remove item"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* DISCOUNT & PROMO CODE SECTION */}
