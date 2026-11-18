@@ -8,7 +8,7 @@ export interface A5ReceiptProps {
   date?: string;
   customerName: string;
   customerPhone?: string;
-  items?: Array<{ name: string; price: number; qty?: number }>;
+  items?: Array<{ name: string; price: number; qty?: number; category?: string }>;
   subtotal?: number;
   discount?: {
     name: string;
@@ -57,12 +57,13 @@ export default function A5Receipt({
       const q = Number(item.qty) || 1;
       const unitP = Number(item.price) || 0;
       const lineTotal = unitP * q;
+      const catBadge = item.category ? `<span style="display: inline-block; background-color: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; margin-left: 6px; text-transform: uppercase;">${item.category.trim()}</span>` : "";
       return `
       <tr style="border-bottom: 1px solid #e2e8f0;">
         <td style="padding: 10px 12px; font-family: monospace; color: #64748b; font-size: 13px;">${idx + 1}</td>
         <td style="padding: 10px 12px; font-weight: 600; color: #0f172a; font-size: 14px;">
-          ${item.name}
-          ${q > 1 ? `<span style="display: inline-block; background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 4px; margin-left: 8px;">× ${q}</span>` : ""}
+          ${item.name} ${catBadge}
+          ${q > 1 ? `<span style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 4px; margin-left: 8px;">× ${q}</span>` : ""}
           ${q > 1 ? `<div style="font-size: 11px; color: #64748b; font-weight: normal; margin-top: 2px;">Rs. ${unitP.toLocaleString()} each</div>` : ""}
         </td>
         <td style="padding: 10px 12px; text-align: right; font-family: monospace; font-weight: 700; color: #0f172a; font-size: 14px;">
@@ -278,31 +279,21 @@ export default function A5Receipt({
 
     const htmlContent = generateA4Html();
 
-    // 1. First attempt: Direct print window (cleanest, 100% full A4 paper scaling)
-    const printWindow = window.open("", "_blank", "width=850,height=1100");
-    if (printWindow) {
-      printWindow.document.open();
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-      setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-      }, 350);
-      return;
-    }
+    // Remove any leftover iframe
+    const oldIframe = document.getElementById("godage-print-iframe");
+    if (oldIframe) oldIframe.remove();
 
-    // 2. Fallback: Isolated hidden iframe
-    let iframe = document.getElementById("a4-print-frame") as HTMLIFrameElement | null;
-    if (iframe) iframe.remove();
-
-    iframe = document.createElement("iframe");
-    iframe.id = "a4-print-frame";
+    // Isolated off-screen iframe with true A4 dimensions so Chromium prints it cleanly without viewport bounds
+    const iframe = document.createElement("iframe");
+    iframe.id = "godage-print-iframe";
     iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
+    iframe.style.top = "-9999px";
+    iframe.style.left = "-9999px";
+    iframe.style.width = "210mm";
+    iframe.style.height = "297mm";
     iframe.style.border = "none";
+    iframe.style.opacity = "0";
+    iframe.style.pointerEvents = "none";
     document.body.appendChild(iframe);
 
     const doc = iframe.contentWindow?.document;
@@ -310,11 +301,16 @@ export default function A5Receipt({
       doc.open();
       doc.write(htmlContent);
       doc.close();
+
       setTimeout(() => {
-        iframe?.contentWindow?.focus();
-        iframe?.contentWindow?.print();
-        setTimeout(() => iframe?.remove(), 3000);
-      }, 350);
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          console.warn("Iframe print fallback triggered:", e);
+          window.print();
+        }
+      }, 400);
     } else {
       window.print();
     }
@@ -430,14 +426,21 @@ export default function A5Receipt({
                     <tr key={index} className="hover:bg-slate-50/50">
                       <td className="py-2 px-3 text-slate-400 font-mono text-[11px]">{index + 1}</td>
                       <td className="py-2 px-3 font-medium text-slate-900 text-xs">
-                        <span>{item.name}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{item.name}</span>
+                          {item.category && (
+                            <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.2 rounded font-semibold uppercase">
+                              {item.category.trim()}
+                            </span>
+                          )}
+                          {q > 1 && (
+                            <span className="inline-block bg-slate-900 text-white text-[10px] font-black px-1.5 py-0.2 rounded">
+                              × {q}
+                            </span>
+                          )}
+                        </div>
                         {q > 1 && (
-                          <span className="ml-2 inline-block bg-slate-100 text-slate-900 border border-slate-300 text-[10px] font-black px-1.5 py-0.2 rounded">
-                            × {q}
-                          </span>
-                        )}
-                        {q > 1 && (
-                          <span className="block text-[10px] text-slate-400 font-normal">
+                          <span className="block text-[10px] text-slate-400 font-normal mt-0.5">
                             Rs. {unitP.toLocaleString()} each
                           </span>
                         )}

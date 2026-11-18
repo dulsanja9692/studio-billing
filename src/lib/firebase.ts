@@ -31,13 +31,28 @@ function getFirebaseApp(): App {
   // 2. Check if whole JSON is passed in FIREBASE_SERVICE_ACCOUNT string env variable
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     try {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+      const serviceAccount = JSON.parse(rawJson);
       return initializeApp({
         credential: cert(serviceAccount),
         projectId: serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID,
       });
     } catch (err: any) {
       console.error("❌ Failed to parse FIREBASE_SERVICE_ACCOUNT env string:", err.message);
+    }
+  }
+
+  // 2b. Check if JSON is passed in FIREBASE_SERVICE_ACCOUNT_BASE64 env variable
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+    try {
+      const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64.trim(), "base64").toString("utf8");
+      const serviceAccount = JSON.parse(decoded);
+      return initializeApp({
+        credential: cert(serviceAccount),
+        projectId: serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID,
+      });
+    } catch (err: any) {
+      console.error("❌ Failed to parse FIREBASE_SERVICE_ACCOUNT_BASE64 env string:", err.message);
     }
   }
 

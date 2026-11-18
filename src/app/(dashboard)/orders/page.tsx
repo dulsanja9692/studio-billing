@@ -19,6 +19,8 @@ import A5Receipt from "@/components/billing/A5Receipt";
 interface OrderItem {
   name: string;
   price: number;
+  qty?: number;
+  category?: string;
 }
 
 interface OrderDiscount {
@@ -451,14 +453,30 @@ function OrdersContent() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 ? (
-                        selectedOrder.items.map((item, idx) => (
-                          <tr key={idx}>
-                            <td className="p-2.5 font-medium text-slate-800">{item.name}</td>
-                            <td className="p-2.5 text-right font-bold text-slate-900">
-                              Rs. {Number(item.price).toLocaleString()}
-                            </td>
-                          </tr>
-                        ))
+                        selectedOrder.items.map((item, idx) => {
+                          const q = Number(item.qty) || 1;
+                          const lineTotal = Number(item.price) * q;
+                          return (
+                            <tr key={idx}>
+                              <td className="p-2.5 font-medium text-slate-800">
+                                <span>{item.name}</span>
+                                {item.category && (
+                                  <span className="ml-1.5 text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-semibold uppercase">
+                                    {item.category.trim()}
+                                  </span>
+                                )}
+                                {q > 1 && (
+                                  <span className="ml-2 inline-block bg-slate-900 text-white text-[10px] font-black px-1.5 py-0.2 rounded">
+                                    × {q}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2.5 text-right font-bold text-slate-900">
+                                Rs. {lineTotal.toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })
                       ) : (
                         <tr>
                           <td colSpan={2} className="p-3 text-center text-slate-400 text-xs">

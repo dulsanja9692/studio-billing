@@ -62,7 +62,8 @@ function OrderContent() {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [step, setStep] = useState(1);
   const [totalSteps, setTotalSteps] = useState(3);
-  const [activeCategory, setActiveCategory] = useState<string>("");
+  const [activeCategory, setActiveCategory] = useState<string>("All Items");
+  const [productSearch, setProductSearch] = useState<string>("");
 
   // Discounts state
   const [availableDiscounts, setAvailableDiscounts] = useState<Discount[]>([]);
@@ -143,9 +144,7 @@ function OrderContent() {
   useEffect(() => {
     getInventoryItems().then((data) => {
       setProducts(data);
-      if (data.length > 0) {
-        setActiveCategory(data[0].category);
-      }
+      setActiveCategory("All Items");
     });
   }, []);
 
@@ -160,13 +159,17 @@ function OrderContent() {
       .catch((err) => console.error("Failed to load discounts:", err));
   }, []);
 
-  const categories = Array.from(new Set(products.map((p) => p.category)));
+  const categories = useMemo(() => {
+    const raw = products.map((p) => (p.category || "").trim()).filter(Boolean);
+    return ["All Items", ...Array.from(new Set(raw))];
+  }, [products]);
 
-  // Add item to cart or increment count if already exists
+  // Add item to cart or increment count if already exists - strict ID matching so identical names in different categories don't collide
   const addToCart = (product: any) => {
+    const prodId = product._id || product.id;
     setCart((prev) => {
       const existingIndex = prev.findIndex(
-        (item) => (item._id && item._id === product._id) || item.name === product.name
+        (item) => prodId && (item._id === prodId || item.id === prodId)
       );
       if (existingIndex > -1) {
         const next = [...prev];
@@ -181,7 +184,10 @@ function OrderContent() {
         ...prev,
         {
           ...product,
-          cartId: `${product._id || product.name}-${Date.now()}-${Math.random()}`,
+          _id: prodId,
+          id: prodId,
+          category: (product.category || "").trim(),
+          cartId: `${prodId}-${Date.now()}-${Math.random()}`,
           qty: 1,
         },
       ];
@@ -478,8 +484,11 @@ function OrderContent() {
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* LEFT: Dynamic Inventory System */}
         <div className="xl:col-span-3 space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-bold text-slate-800">Select Studio Services &amp; Items</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">Select Studio Services &amp; Items</h3>
+              <p className="text-xs text-slate-500">Add multiple products from any category — identical sizes won't conflict</p>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-400 uppercase">Payment Step:</span>
               {[1, 2, 3].map((s) => (
@@ -495,41 +504,80 @@ function OrderContent() {
             </div>
           </div>
 
+          {/* Product Quick Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search products or sizes across categories (e.g. 8 * 12, Frame, Wedding)..."
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              className="pl-9 h-9 bg-white text-xs border-slate-200"
+            />
+            {productSearch && (
+              <button
+                type="button"
+                onClick={() => setProductSearch("")}
+                className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-700 font-semibold"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
           <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full">
-            <TabsList className="bg-slate-100 p-1 mb-4 overflow-x-auto justify-start">
+            <TabsList className="bg-slate-100 p-1 mb-4 overflow-x-auto justify-start flex-wrap h-auto gap-1">
               {categories.map((cat) => (
-                <TabsTrigger key={cat} value={cat} className="capitalize px-6 text-xs font-semibold">
+                <TabsTrigger key={cat} value={cat} className="capitalize px-4 py-1.5 text-xs font-semibold">
                   {cat}
                 </TabsTrigger>
               ))}
             </TabsList>
 
-            {categories.map((cat) => (
-              <TabsContent key={cat} value={cat} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {products
-                  .filter((p) => p.category === cat)
-                  .map((product) => {
-                    const inCart = cart.find(
-                      (i) => (i._id && i._id === product._id) || i.name === product.name
-                    );
-                    const inCartQty = inCart ? Number(inCart.qty) || 1 : 0;
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {products
+                .filter((p) => {
+                  const pCat = (p.category || "").trim();
+                  const matchesCat = activeCategory === "All Items" || pCat.toLowerCase() === activeCategory.toLowerCase();
+                  const term = productSearch.trim().toLowerCase();
+                  const matchesSearch = !term || (p.name || "").toLowerCase().includes(term) || pCat.toLowerCase().includes(term);
+                  return matchesCat && matchesSearch;
+                })
+                .map((product) => {
+                  const prodId = product._id || product.id;
+                  const inCart = cart.find(
+                    (i) => prodId && (i._id === prodId || i.id === prodId)
+                  );
+                  const inCartQty = inCart ? Number(inCart.qty) || 1 : 0;
+                  const pCat = (product.category || "").trim();
 
-                    return (
-                      <Card 
-                        key={product._id} 
-                        className={`cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all border-none shadow-sm hover:shadow bg-white relative ${
-                          inCartQty > 0 ? "ring-2 ring-blue-500 bg-blue-50/20" : ""
-                        }`}
-                        onClick={() => addToCart(product)}
-                      >
-                        {inCartQty > 0 && (
-                          <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white font-black text-[11px] w-6 h-6 rounded-full flex items-center justify-center shadow-md border-2 border-white">
-                            {inCartQty}
-                          </span>
-                        )}
-                        <CardContent className="p-4 space-y-2 text-center">
-                          <p className="font-bold text-sm truncate text-slate-900">{product.name}</p>
-                          <p className="text-blue-600 font-black">Rs. {Number(product.price).toLocaleString()}</p>
+                  return (
+                    <Card 
+                      key={prodId} 
+                      className={`cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all border-none shadow-sm hover:shadow bg-white relative ${
+                        inCartQty > 0 ? "ring-2 ring-blue-500 bg-blue-50/20" : ""
+                      }`}
+                      onClick={() => addToCart(product)}
+                    >
+                      {inCartQty > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white font-black text-[11px] w-6 h-6 rounded-full flex items-center justify-center shadow-md border-2 border-white">
+                          {inCartQty}
+                        </span>
+                      )}
+                      <CardContent className="p-3.5 space-y-1.5 text-center flex flex-col justify-between h-full">
+                        <div>
+                          {pCat && (
+                            <span className="inline-block text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded mb-1">
+                              {pCat}
+                            </span>
+                          )}
+                          <p className="font-bold text-sm truncate text-slate-900" title={product.name}>
+                            {product.name}
+                          </p>
+                        </div>
+                        <div className="space-y-2 pt-1">
+                          <p className="text-blue-600 font-black text-sm">
+                            Rs. {Number(product.price).toLocaleString()}
+                          </p>
                           <Button 
                             size="sm" 
                             variant={inCartQty > 0 ? "default" : "secondary"}
@@ -545,12 +593,12 @@ function OrderContent() {
                           >
                             {inCartQty > 0 ? `+ Add More (${inCartQty})` : "+ Add to Bill"}
                           </Button>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-              </TabsContent>
-            ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+            </div>
           </Tabs>
         </div>
 
@@ -671,10 +719,17 @@ function OrderContent() {
                       key={item.cartId} 
                       className="flex items-center justify-between text-xs py-1.5 px-2 bg-slate-50/80 hover:bg-slate-50 rounded-lg border border-slate-100 transition-colors"
                     >
-                      {/* Name & Unit Price */}
+                      {/* Name, Category Badge & Unit Price */}
                       <div className="min-w-0 flex-1 pr-2">
-                        <p className="font-bold text-slate-900 truncate text-xs">{item.name}</p>
-                        <p className="text-[10px] text-slate-500 font-mono">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-bold text-slate-900 truncate text-xs">{item.name}</p>
+                          {item.category && (
+                            <span className="text-[9px] bg-slate-200/90 text-slate-700 px-1.5 py-0.2 rounded font-semibold uppercase shrink-0">
+                              {item.category.trim()}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-mono mt-0.5">
                           Rs. {itemPrice.toLocaleString()} {qty > 1 ? `× ${qty}` : ""}
                         </p>
                       </div>
