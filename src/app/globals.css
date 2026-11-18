@@ -132,11 +132,11 @@
 }
 
 /* =========================================================
-   A5 STUDIO RECEIPT PRINT STYLES (PRINTING PURPOSE ONLY)
+   A4 STUDIO RECEIPT PRINT STYLES (PRINTING PURPOSE ONLY)
    ========================================================= */
 @page {
-  size: A5 portrait;
-  margin: 6mm 8mm;
+  size: A4 portrait;
+  margin: 12mm 15mm;
 }
 
 @media print {

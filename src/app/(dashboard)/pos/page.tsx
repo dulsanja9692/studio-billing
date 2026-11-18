@@ -876,7 +876,7 @@ function OrderContent() {
                   }}
                   className="text-xs font-semibold gap-1 text-slate-700"
                 >
-                  <Printer className="h-3.5 w-3.5" /> Print A5 Bill
+                  <Printer className="h-3.5 w-3.5" /> Print Bill (A4)
                 </Button>
                 <Button 
                   variant="ghost" 
