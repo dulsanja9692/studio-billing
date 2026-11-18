@@ -82,37 +82,34 @@ function OrderContent() {
     setCart((prev) => [...prev, { ...product, cartId: `${product._id}-${Math.random()}` }]);
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.price, 0);
+  const cartTotal = cart.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
   const previousBalance = customerData?.balance || 0;
-  const grandTotal = cartTotal + previousBalance;
 
   const handleSaveOrder = async () => {
-    if (!customer || (cart.length === 0 && paymentAmount === 0)) return alert("Add customer and items/payment");
+    if (!customer) return alert("Please enter or select a customer name.");
+    if (cart.length === 0) return alert("Please add at least one item to the cart.");
     
+    const paid = Number(paymentAmount) || 0;
+    const currentOrderTotal = cartTotal;
+    const remainingBalance = Math.max(0, currentOrderTotal - paid);
+
     const result = await createStepOrder({
       customerName: customer,
       customerPhone: customerPhone,
       items: cart,
-      totalAmount: cartTotal, // This is the total for the CURRENT order
-      paidNow: paymentAmount,
+      totalAmount: currentOrderTotal,
+      paidNow: paid,
       currentStep: step
     });
 
     if (result.success) {
-      const remainingBalance = grandTotal - paymentAmount;
-
-      const finalItems = cart.length > 0 ? [...cart] : (customerData?.purchasedProducts || []);
-      const orderTotal = cartTotal > 0 ? (cartTotal + previousBalance) : (customerData?.totalAmount || paymentAmount);
-      const paid = paymentAmount;
-      const balance = Math.max(0, remainingBalance);
-
       setLastReceipt({
-        customer: customer || (customerData?._id) || "Valued Customer",
-        phone: customerPhone || (customerData?.phone) || "",
-        items: finalItems,
-        totalAmount: orderTotal,
+        customer: customer,
+        phone: customerPhone || "",
+        items: [...cart],
+        totalAmount: currentOrderTotal,
         paidAmount: paid,
-        balanceDue: balance,
+        balanceDue: remainingBalance,
         step: step,
         billNo: `#GS-${Math.floor(1000 + Math.random() * 9000)}`,
         date: new Date().toLocaleDateString(),
@@ -129,15 +126,12 @@ function OrderContent() {
         
         // Logical progression based on plan
         if (totalSteps === 1) {
-          // They chose 1 step but didn't pay all? Still finish or stay.
           setCustomer("");
           setStep(1);
         } else if (totalSteps === 2) {
-          // 2 Step Plan: 1 -> 3
           if (step === 1) setStep(3);
           else { setCustomer(""); setStep(1); }
         } else {
-          // 3 Step Plan: 1 -> 2 -> 3
           if (step === 1) setStep(2);
           else if (step === 2) setStep(3);
           else { setCustomer(""); setStep(1); }
@@ -146,10 +140,6 @@ function OrderContent() {
 
       setCart([]);
       setPaymentAmount(0);
-      
-      if (customer) {
-        getCustomerByName(customer).then(setCustomerData);
-      }
       setShowReceipt(true);
     }
   };
@@ -306,28 +296,15 @@ function OrderContent() {
             </div>
 
             <div className="space-y-3 pt-2">
-              <div className="space-y-1 pb-2 border-b border-slate-100">
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>New Items Total</span>
-                  <span>Rs. {cartTotal}</span>
-                </div>
-                {previousBalance > 0 && (
-                  <div className="flex justify-between text-xs text-red-400">
-                    <span>Previous Balance</span>
-                    <span>Rs. {previousBalance}</span>
-                  </div>
-                )}
-              </div>
-
               <div className="flex justify-between font-black text-xl text-slate-900 pt-1">
                 <span>Total Amount</span>
-                <span>Rs. {grandTotal}</span>
+                <span>Rs. {cartTotal.toLocaleString()}</span>
               </div>
 
               <div className="flex justify-between text-sm font-bold text-slate-500 pb-2">
-                <span>Balance</span>
-                <span className={grandTotal - paymentAmount > 0 ? "text-red-600" : "text-green-600"}>
-                  Rs. {Math.max(0, grandTotal - paymentAmount)}
+                <span>Balance Due</span>
+                <span className={cartTotal - paymentAmount > 0 ? "text-red-600" : "text-green-600"}>
+                  Rs. {Math.max(0, cartTotal - paymentAmount).toLocaleString()}
                 </span>
               </div>
               
@@ -377,8 +354,8 @@ function OrderContent() {
             <div className="grid grid-cols-2 gap-4 text-xs md:text-sm bg-slate-50 p-3.5 rounded-lg border border-slate-200">
               <div className="space-y-1">
                 <p className="text-slate-500 uppercase text-[11px] font-bold">Customer Name</p>
-                <p className="text-slate-900 font-bold text-sm md:text-base">{lastReceipt?.customer || customer || (customerData?._id) || "Customer"}</p>
-                <p className="text-slate-600 text-xs md:text-sm">Phone: {lastReceipt?.phone || customerPhone || (customerData?.phone) || "N/A"}</p>
+                <p className="text-slate-900 font-bold text-sm md:text-base">{lastReceipt?.customer || customer || "Customer"}</p>
+                <p className="text-slate-600 text-xs md:text-sm">Phone: {lastReceipt?.phone || customerPhone || "N/A"}</p>
               </div>
               <div className="space-y-1 text-right">
                 <p className="text-slate-500 uppercase text-[11px] font-bold">Invoice Details</p>
@@ -396,7 +373,7 @@ function OrderContent() {
                 </tr>
               </thead>
               <tbody>
-                {(lastReceipt?.items && lastReceipt.items.length > 0 ? lastReceipt.items : cart).map((p: any, i: number) => (
+                {(lastReceipt?.items || cart).map((p: any, i: number) => (
                   <tr key={i} className="border-b border-slate-100 font-medium">
                     <td className="py-2.5 text-slate-800 text-xs md:text-sm">{p.name}</td>
                     <td className="text-right py-2.5 font-bold text-slate-900 text-xs md:text-sm">Rs. {Number(p.price).toLocaleString()}</td>
@@ -409,7 +386,7 @@ function OrderContent() {
             <div className="space-y-2.5 pt-4 border-t-2 border-slate-900">
               <div className="flex justify-between text-base md:text-lg font-black text-slate-900">
                 <span>Total Amount</span>
-                <span>Rs. {Number(lastReceipt?.totalAmount ?? (cartTotal + (customerData?.balance || 0))).toLocaleString()}</span>
+                <span>Rs. {Number(lastReceipt?.totalAmount ?? cartTotal).toLocaleString()}</span>
               </div>
 
               <div className="flex justify-between text-sm md:text-base font-bold text-slate-800">
@@ -419,21 +396,21 @@ function OrderContent() {
 
               <div className="flex justify-between text-base md:text-lg font-black pt-2 border-t border-dashed border-slate-300">
                 <span>Balance Due</span>
-                <span className={Number(lastReceipt?.balanceDue ?? 0) > 0 ? "text-red-600 font-black" : "text-emerald-700 font-black"}>
-                  Rs. {Number(lastReceipt?.balanceDue ?? Math.max(0, (cartTotal + (customerData?.balance || 0)) - paymentAmount)).toLocaleString()}
+                <span className={Number(lastReceipt?.balanceDue ?? Math.max(0, cartTotal - paymentAmount)) > 0 ? "text-red-600 font-black" : "text-emerald-700 font-black"}>
+                  Rs. {Number(lastReceipt?.balanceDue ?? Math.max(0, cartTotal - paymentAmount)).toLocaleString()}
                 </span>
               </div>
             </div>
 
             {/* Footer */}
             <div className="text-center pt-6 border-t border-slate-200 space-y-2">
-              {(lastReceipt ? lastReceipt.balanceDue <= 0 : (cartTotal + (customerData?.balance || 0) - paymentAmount <= 0)) ? (
+              {Number(lastReceipt?.balanceDue ?? Math.max(0, cartTotal - paymentAmount)) <= 0 ? (
                 <p className="text-xs md:text-sm font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 py-1.5 px-4 rounded-full inline-block">
                   ✓ Full Payment Completed
                 </p>
               ) : (
                 <p className="text-xs md:text-sm font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 py-1.5 px-4 rounded-full inline-block">
-                  Next Step Balance: Rs. {Number(lastReceipt?.balanceDue ?? Math.max(0, (cartTotal + (customerData?.balance || 0)) - paymentAmount)).toLocaleString()}
+                  Next Step Balance: Rs. {Number(lastReceipt?.balanceDue ?? Math.max(0, cartTotal - paymentAmount)).toLocaleString()}
                 </p>
               )}
               <p className="text-xs text-slate-500 font-medium">
