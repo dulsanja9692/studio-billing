@@ -130,3 +130,56 @@
     @apply font-sans;
   }
 }
+
+/* =========================================================
+   A5 PROFESSIONAL STUDIO RECEIPT PRINT STYLES
+   ========================================================= */
+@page {
+  size: A5 portrait;
+  margin: 6mm 8mm;
+}
+
+@media print {
+  html, body {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide everything outside the receipt */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Only make the receipt and its children visible */
+  #printable-receipt,
+  #printable-receipt * {
+    visibility: visible !important;
+  }
+
+  #printable-receipt {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 135mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  /* Hide buttons, dialog backdrops, scrollbars, etc. */
+  .no-print,
+  button,
+  [data-radix-focus-guard],
+  [role="dialog"] > button {
+    display: none !important;
+  }
+}

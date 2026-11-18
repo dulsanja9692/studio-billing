@@ -14,6 +14,7 @@ import {
   CreditCard, Phone, User, Calendar, FileText, RefreshCw 
 } from "lucide-react";
 import { updateCustomerPayment } from "@/lib/actions/customerActions";
+import A5Receipt from "@/components/billing/A5Receipt";
 
 interface OrderItem {
   name: string;
@@ -532,125 +533,24 @@ function OrdersContent() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 2: PRINTABLE RECEIPT TEMPLATE */}
+      {/* MODAL 2: A5 PROFESSIONAL STUDIO RECEIPT */}
       <Dialog open={!!receiptOrder} onOpenChange={(open) => !open && setReceiptOrder(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-xl p-2 sm:p-5 bg-slate-100 overflow-y-auto max-h-[96vh]">
           {receiptOrder && (
-            <div className="p-6 md:p-8 bg-white text-slate-900 space-y-6 font-sans">
-              {/* Header */}
-              <div className="text-center border-b border-slate-200 pb-5">
-                <div className="flex justify-center mb-3">
-                  <img src="/logo.jpg" alt="Godage Studio Logo" className="h-16 w-auto object-contain" />
-                </div>
-                <h2 className="text-2xl md:text-3xl font-black uppercase tracking-wider text-slate-900">Godage Studio</h2>
-                <p className="text-xs md:text-sm text-slate-600 font-medium mt-0.5">Professional Photography &amp; Videography</p>
-                <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-900 font-bold text-xs md:text-sm">
-                  <span>📞 Hotline / WhatsApp:</span>
-                  <span className="text-blue-700 font-black tracking-wide">0715926263</span>
-                </div>
-              </div>
-
-              {/* Customer & Invoice Details */}
-              <div className="grid grid-cols-2 gap-4 text-xs md:text-sm bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-                <div className="space-y-1">
-                  <p className="text-slate-500 uppercase text-[11px] font-bold">Customer Name</p>
-                  <p className="text-slate-900 font-bold text-sm md:text-base">{receiptOrder.customerName}</p>
-                  <p className="text-slate-600 text-xs md:text-sm">Phone: {receiptOrder.customerPhone || "N/A"}</p>
-                </div>
-                <div className="space-y-1 text-right">
-                  <p className="text-slate-500 uppercase text-[11px] font-bold">Invoice Details</p>
-                  <p className="text-slate-900 font-bold text-sm md:text-base font-mono">
-                    {receiptOrder.billNo || `#GS-${receiptOrder._id?.slice(0, 5).toUpperCase()}`}
-                  </p>
-                  <p className="text-slate-600 text-xs md:text-sm">
-                    Date: {receiptOrder.createdAt ? new Date(receiptOrder.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <table className="w-full text-xs md:text-sm border-t border-slate-200 pt-3">
-                <thead>
-                  <tr className="border-b-2 border-slate-900 text-slate-900 uppercase font-bold text-xs md:text-sm">
-                    <th className="text-left py-2.5">Service / Item</th>
-                    <th className="text-right py-2.5">Price (Rs.)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.isArray(receiptOrder.items) && receiptOrder.items.length > 0 ? (
-                    receiptOrder.items.map((p, i) => (
-                      <tr key={i} className="border-b border-slate-100 font-medium">
-                        <td className="py-2.5 text-slate-800 text-xs md:text-sm">{p.name}</td>
-                        <td className="text-right py-2.5 font-bold text-slate-900 text-xs md:text-sm">
-                          Rs. {Number(p.price).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr className="border-b border-slate-100 font-medium">
-                      <td className="py-2.5 text-slate-800 text-xs md:text-sm">Photography / Studio Order</td>
-                      <td className="text-right py-2.5 font-bold text-slate-900 text-xs md:text-sm">
-                        Rs. {Number(receiptOrder.totalAmount).toLocaleString()}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-
-              {/* Financial Summary */}
-              <div className="space-y-2.5 pt-4 border-t-2 border-slate-900">
-                {receiptOrder.subtotal !== undefined && receiptOrder.subtotal > receiptOrder.totalAmount && (
-                  <div className="flex justify-between text-xs md:text-sm text-slate-500">
-                    <span>Subtotal</span>
-                    <span>Rs. {Number(receiptOrder.subtotal).toLocaleString()}</span>
-                  </div>
-                )}
-                {receiptOrder.discount && Number(receiptOrder.discount.amount) > 0 && (
-                  <div className="flex justify-between text-xs md:text-sm text-emerald-600 font-bold">
-                    <span>Discount ({receiptOrder.discount.name})</span>
-                    <span>- Rs. {Number(receiptOrder.discount.amount).toLocaleString()}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-base md:text-lg font-black text-slate-900">
-                  <span>Total Amount</span>
-                  <span>Rs. {Number(receiptOrder.totalAmount).toLocaleString()}</span>
-                </div>
-
-                <div className="flex justify-between text-sm md:text-base font-bold text-slate-800">
-                  <span>Paid Amount</span>
-                  <span className="text-emerald-700 font-black">
-                    Rs. {Number(receiptOrder.advancePaid).toLocaleString()}
-                  </span>
-                </div>
-
-                <div className="flex justify-between text-base md:text-lg font-black pt-2 border-t border-dashed border-slate-300">
-                  <span>Balance Due</span>
-                  <span className={Math.max(0, receiptOrder.totalAmount - receiptOrder.advancePaid) > 0 ? "text-red-600 font-black" : "text-emerald-700 font-black"}>
-                    Rs. {Math.max(0, receiptOrder.totalAmount - receiptOrder.advancePaid).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="text-center pt-6 border-t border-slate-200 space-y-2">
-                {Math.max(0, receiptOrder.totalAmount - receiptOrder.advancePaid) <= 0 ? (
-                  <p className="text-xs md:text-sm font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 py-1.5 px-4 rounded-full inline-block">
-                    ✓ Full Payment Completed
-                  </p>
-                ) : (
-                  <p className="text-xs md:text-sm font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 py-1.5 px-4 rounded-full inline-block">
-                    Balance Due: Rs. {Math.max(0, receiptOrder.totalAmount - receiptOrder.advancePaid).toLocaleString()}
-                  </p>
-                )}
-                <p className="text-xs text-slate-500 font-medium">
-                  Thank you for choosing Godage Studio! • For inquiries call 0715926263
-                </p>
-              </div>
-
-              <Button className="w-full text-sm md:text-base py-5 font-bold bg-blue-600 hover:bg-blue-700" onClick={() => window.print()}>
-                <Printer className="mr-2 h-4 w-4" /> Print Receipt
-              </Button>
-            </div>
+            <A5Receipt 
+              billNo={receiptOrder.billNo || `#GS-${receiptOrder._id?.slice(0, 5).toUpperCase()}`}
+              date={receiptOrder.createdAt ? new Date(receiptOrder.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }) : undefined}
+              customerName={receiptOrder.customerName}
+              customerPhone={receiptOrder.customerPhone}
+              items={receiptOrder.items}
+              subtotal={receiptOrder.subtotal}
+              discount={receiptOrder.discount}
+              totalAmount={receiptOrder.totalAmount}
+              paidAmount={receiptOrder.advancePaid}
+              balanceDue={Math.max(0, receiptOrder.totalAmount - receiptOrder.advancePaid)}
+              paymentStep={receiptOrder.paymentStep || 1}
+              onClose={() => setReceiptOrder(null)}
+            />
           )}
         </DialogContent>
       </Dialog>

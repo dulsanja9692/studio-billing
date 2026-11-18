@@ -34,9 +34,25 @@ export async function POST(req: Request) {
     const status = advancePaid >= totalAmount ? "COMPLETED" : "PARTIAL";
     const billNo = (body.billNo || `#GS-${Math.floor(1000 + Math.random() * 9000)}`).toUpperCase();
 
+    let customerPhone = (body.customerPhone || "").trim();
+    const customerName = (body.customerName || "").trim();
+
+    if (!customerPhone && customerName) {
+      try {
+        const custSnap = await db.collection("customers").where("name", "==", customerName).limit(1).get();
+        if (!custSnap.empty) {
+          customerPhone = custSnap.docs[0].data()?.phone || "";
+        }
+      } catch (e) {
+        console.warn("Could not retrieve customer phone fallback:", e);
+      }
+    }
+
     const newOrderData = {
       ...body,
       billNo,
+      customerName,
+      customerPhone,
       totalAmount,
       advancePaid,
       paymentStep: Number(body.paymentStep) || 1,

@@ -20,9 +20,25 @@ export async function createStepOrder(orderData: any) {
   const paidNow = Number(orderData.paidNow) || 0;
   const paymentStep = Number(orderData.currentStep) || 1;
   const customerName = (orderData.customerName || "").trim();
-  const customerPhone = (orderData.customerPhone || "").trim();
+  let customerPhone = (orderData.customerPhone || "").trim();
   const billNo = (orderData.billNo || `#GS-${Math.floor(1000 + Math.random() * 9000)}`).toUpperCase();
   const discount = orderData.discount || null;
+
+  // If customer phone is empty, check if we already have this customer registered with a phone number
+  if (!customerPhone && customerName) {
+    try {
+      const existingCustomerSnap = await db
+        .collection("customers")
+        .where("name", "==", customerName)
+        .limit(1)
+        .get();
+      if (!existingCustomerSnap.empty) {
+        customerPhone = existingCustomerSnap.docs[0].data()?.phone || "";
+      }
+    } catch (e) {
+      console.warn("Could not check customer phone fallback:", e);
+    }
+  }
 
   const newOrder = {
     billNo,
@@ -56,7 +72,8 @@ export async function createStepOrder(orderData: any) {
       });
     } else if (customerPhone) {
       const existingDoc = customerQuery.docs[0];
-      if (!existingDoc.data().phone) {
+      const existingPhone = existingDoc.data()?.phone;
+      if (!existingPhone || existingPhone !== customerPhone) {
         await existingDoc.ref.update({ phone: customerPhone });
       }
     }
@@ -64,5 +81,5 @@ export async function createStepOrder(orderData: any) {
 
   revalidatePath("/customers");
   revalidatePath("/orders");
-  return { success: true, billNo, orderId: docRef.id };
+  return { success: true, billNo, orderId: docRef.id, customerPhone };
 }

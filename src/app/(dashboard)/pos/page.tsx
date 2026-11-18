@@ -15,6 +15,7 @@ import { useSearchParams } from "next/navigation";
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription 
 } from "@/components/ui/dialog";
+import A5Receipt from "@/components/billing/A5Receipt";
 
 interface Discount {
   _id: string;
@@ -57,6 +58,7 @@ function OrderContent() {
   const [customer, setCustomer] = useState(searchParams.get("name") || "");
   const [customerPhone, setCustomerPhone] = useState(searchParams.get("phone") || "");
   const [customerData, setCustomerData] = useState<any>(null);
+  const [customersList, setCustomersList] = useState<Array<{ name: string; phone?: string }>>([]);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [step, setStep] = useState(1);
   const [totalSteps, setTotalSteps] = useState(3);
@@ -103,12 +105,27 @@ function OrderContent() {
     if (phone) setCustomerPhone(phone);
   }, [searchParams]);
 
-  // Load customer history if name matches
+  // Load registered customers for instant name & phone auto-completion
+  useEffect(() => {
+    fetch("/api/customers", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: any[]) => {
+        if (Array.isArray(data)) {
+          setCustomersList(data.map((c) => ({ name: c.name || c._id, phone: c.phone || "" })));
+        }
+      })
+      .catch((err) => console.error("Failed to load customers for autocomplete:", err));
+  }, []);
+
+  // Load customer history & phone if name matches
   useEffect(() => {
     if (customer.trim()) {
       getCustomerByName(customer.trim()).then((data) => {
         setCustomerData(data);
         if (data) {
+          if (data.phone && !customerPhone) {
+            setCustomerPhone(data.phone);
+          }
           const nextStep = Math.min(3, (data.latestPaymentStep || 0) + 1);
           setStep(nextStep);
           if (data.balance === 0 && data.latestPaymentStep >= 3) {
@@ -293,10 +310,12 @@ function OrderContent() {
       amount: discountAmount
     } : null;
 
+    const finalPhone = (customerPhone || customerData?.phone || "").trim();
+
     const result = await createStepOrder({
       billNo: currentBillNo,
       customerName: customer,
-      customerPhone: customerPhone,
+      customerPhone: finalPhone,
       items: cart,
       subtotal: cartTotal,
       discount: discountPayload,
@@ -306,9 +325,10 @@ function OrderContent() {
     });
 
     if (result.success) {
+      const confirmedPhone = result.customerPhone || finalPhone || "";
       setLastReceipt({
         customer: customer,
-        phone: customerPhone || "",
+        phone: confirmedPhone,
         items: [...cart],
         subtotal: cartTotal,
         discount: discountPayload,
@@ -317,7 +337,7 @@ function OrderContent() {
         balanceDue: remainingBalance,
         step: step,
         billNo: currentBillNo,
-        date: new Date().toLocaleDateString(),
+        date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
       });
 
       if (remainingBalance <= 0) {
@@ -334,14 +354,15 @@ function OrderContent() {
 
         if (totalSteps === 1) {
           setCustomer("");
+          setCustomerPhone("");
           setStep(1);
         } else if (totalSteps === 2) {
           if (step === 1) setStep(3);
-          else { setCustomer(""); setStep(1); }
+          else { setCustomer(""); setCustomerPhone(""); setStep(1); }
         } else {
           if (step === 1) setStep(2);
           else if (step === 2) setStep(3);
-          else { setCustomer(""); setStep(1); }
+          else { setCustomer(""); setCustomerPhone(""); setStep(1); }
         }
       }
 
@@ -478,20 +499,37 @@ function OrderContent() {
                 <h3 className="font-bold text-slate-900">Checkout Summary</h3>
               </div>
 
-              {/* Customer Inputs */}
+              {/* Customer Inputs with Autocomplete */}
               <div className="space-y-2.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Customer Details</label>
+                <div className="space-y-1">
+                  <Input 
+                    list="registered-customers"
+                    placeholder="Customer Full Name *" 
+                    value={customer} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomer(val);
+                      const matched = customersList.find((c) => c.name.toLowerCase() === val.toLowerCase());
+                      if (matched && matched.phone) {
+                        setCustomerPhone(matched.phone);
+                      }
+                    }}
+                    className="bg-slate-50 border-slate-200 text-xs h-9"
+                  />
+                  <datalist id="registered-customers">
+                    {customersList.map((c, i) => (
+                      <option key={i} value={c.name}>
+                        {c.phone ? `${c.phone}` : ""}
+                      </option>
+                    ))}
+                  </datalist>
+                </div>
                 <Input 
-                  placeholder="Customer Full Name *" 
-                  value={customer} 
-                  onChange={(e) => setCustomer(e.target.value)}
-                  className="bg-slate-50 border-slate-200 text-xs h-9"
-                />
-                <Input 
-                  placeholder="Phone Number (Optional)" 
+                  placeholder="Customer Phone Number (e.g. 0715926263)" 
                   value={customerPhone} 
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="bg-slate-50 border-slate-200 text-xs h-9"
+                  className="bg-slate-50 border-slate-200 text-xs h-9 font-medium"
                 />
                 
                 <div className="space-y-1 pt-1">
@@ -819,6 +857,30 @@ function OrderContent() {
                 <Button 
                   variant="outline" 
                   size="sm"
+                  onClick={() => {
+                    setLastReceipt({
+                      customer: searchedBill.customerName,
+                      phone: searchedBill.customerPhone || "",
+                      items: searchedBill.items || [],
+                      subtotal: searchedBill.subtotal || searchedBill.totalAmount,
+                      discount: searchedBill.discount || null,
+                      totalAmount: searchedBill.totalAmount,
+                      paidAmount: searchedBill.advancePaid,
+                      balanceDue: Math.max(0, searchedBill.totalAmount - searchedBill.advancePaid),
+                      step: searchedBill.paymentStep || 1,
+                      billNo: searchedBill.billNo || `#GS-${searchedBill._id?.slice(0, 5).toUpperCase()}`,
+                      date: searchedBill.createdAt ? new Date(searchedBill.createdAt).toLocaleDateString("en-GB") : new Date().toLocaleDateString("en-GB"),
+                    });
+                    setShowBillHistoryModal(false);
+                    setShowReceipt(true);
+                  }}
+                  className="text-xs font-semibold gap-1 text-slate-700"
+                >
+                  <Printer className="h-3.5 w-3.5" /> Print A5 Bill
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
                   onClick={() => setShowBillHistoryModal(false)}
                   className="text-xs"
                 >
@@ -830,111 +892,26 @@ function OrderContent() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 2: PRINTABLE RECEIPT TEMPLATE WITH DISCOUNT */}
+      {/* MODAL 2: A5 PROFESSIONAL STUDIO RECEIPT */}
       <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
-        <DialogContent className="max-w-lg">
-          <div className="p-6 md:p-8 bg-white text-slate-900 space-y-6 font-sans">
-            {/* Header */}
-            <div className="text-center border-b border-slate-200 pb-5">
-              <div className="flex justify-center mb-3">
-                <img src="/logo.jpg" alt="Godage Studio Logo" className="h-16 w-auto object-contain" />
-              </div>
-              <h2 className="text-2xl md:text-3xl font-black uppercase tracking-wider text-slate-900">Godage Studio</h2>
-              <p className="text-xs md:text-sm text-slate-600 font-medium mt-0.5">Professional Photography &amp; Videography</p>
-              <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-900 font-bold text-xs md:text-sm">
-                <span>📞 Hotline / WhatsApp:</span>
-                <span className="text-blue-700 font-black tracking-wide">0715926263</span>
-              </div>
-            </div>
-
-            {/* Customer & Invoice Details */}
-            <div className="grid grid-cols-2 gap-4 text-xs md:text-sm bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-              <div className="space-y-1">
-                <p className="text-slate-500 uppercase text-[11px] font-bold">Customer Name</p>
-                <p className="text-slate-900 font-bold text-sm md:text-base">{lastReceipt?.customer || customer || "Customer"}</p>
-                <p className="text-slate-600 text-xs md:text-sm">Phone: {lastReceipt?.phone || customerPhone || "N/A"}</p>
-              </div>
-              <div className="space-y-1 text-right">
-                <p className="text-slate-500 uppercase text-[11px] font-bold">Invoice Details</p>
-                <p className="text-slate-900 font-bold text-sm md:text-base font-mono">{lastReceipt?.billNo || `#GS-1001`}</p>
-                <p className="text-slate-600 text-xs md:text-sm">Date: {lastReceipt?.date || new Date().toLocaleDateString()}</p>
-              </div>
-            </div>
-
-            {/* Items Table */}
-            <table className="w-full text-xs md:text-sm border-t border-slate-200 pt-3">
-              <thead>
-                <tr className="border-b-2 border-slate-900 text-slate-900 uppercase font-bold text-xs md:text-sm">
-                  <th className="text-left py-2.5">Service / Item</th>
-                  <th className="text-right py-2.5">Price (Rs.)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(lastReceipt?.items || cart).map((p: any, i: number) => (
-                  <tr key={i} className="border-b border-slate-100 font-medium">
-                    <td className="py-2.5 text-slate-800 text-xs md:text-sm">{p.name}</td>
-                    <td className="text-right py-2.5 font-bold text-slate-900 text-xs md:text-sm">
-                      Rs. {Number(p.price).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Financial Summary */}
-            <div className="space-y-2.5 pt-4 border-t-2 border-slate-900">
-              {lastReceipt?.discount && lastReceipt.discount.amount > 0 && (
-                <>
-                  <div className="flex justify-between text-xs md:text-sm text-slate-500">
-                    <span>Subtotal</span>
-                    <span>Rs. {Number(lastReceipt.subtotal).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-xs md:text-sm text-emerald-600 font-bold">
-                    <span>Discount ({lastReceipt.discount.name})</span>
-                    <span>- Rs. {Number(lastReceipt.discount.amount).toLocaleString()}</span>
-                  </div>
-                </>
-              )}
-
-              <div className="flex justify-between text-base md:text-lg font-black text-slate-900">
-                <span>Total Amount</span>
-                <span>Rs. {Number(lastReceipt?.totalAmount ?? finalOrderTotal).toLocaleString()}</span>
-              </div>
-
-              <div className="flex justify-between text-sm md:text-base font-bold text-slate-800">
-                <span>Paid Amount</span>
-                <span className="text-emerald-700 font-black">
-                  Rs. {Number(lastReceipt?.paidAmount ?? paymentAmount).toLocaleString()}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-base md:text-lg font-black pt-2 border-t border-dashed border-slate-300">
-                <span>Balance Due</span>
-                <span className={Number(lastReceipt?.balanceDue ?? remainingBalance) > 0 ? "text-red-600 font-black" : "text-emerald-700 font-black"}>
-                  Rs. {Number(lastReceipt?.balanceDue ?? remainingBalance).toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="text-center pt-6 border-t border-slate-200 space-y-2">
-              {Number(lastReceipt?.balanceDue ?? remainingBalance) <= 0 ? (
-                <p className="text-xs md:text-sm font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 py-1.5 px-4 rounded-full inline-block">
-                  ✓ Full Payment Completed
-                </p>
-              ) : (
-                <p className="text-xs md:text-sm font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 py-1.5 px-4 rounded-full inline-block">
-                  Next Step Balance: Rs. {Number(lastReceipt?.balanceDue ?? remainingBalance).toLocaleString()}
-                </p>
-              )}
-              <p className="text-xs text-slate-500 font-medium">
-                Thank you for choosing Godage Studio! • For inquiries call 0715926263
-              </p>
-            </div>
-          </div>
-          <Button className="w-full text-sm md:text-base py-5 font-bold bg-blue-600 hover:bg-blue-700" onClick={() => window.print()}>
-            Print Receipt
-          </Button>
+        <DialogContent className="max-w-xl p-2 sm:p-5 bg-slate-100 overflow-y-auto max-h-[96vh]">
+          {lastReceipt && (
+            <A5Receipt 
+              billNo={lastReceipt.billNo}
+              date={lastReceipt.date}
+              customerName={lastReceipt.customer}
+              customerPhone={lastReceipt.phone}
+              items={lastReceipt.items}
+              subtotal={lastReceipt.subtotal}
+              discount={lastReceipt.discount}
+              totalAmount={lastReceipt.totalAmount}
+              paidAmount={lastReceipt.paidAmount}
+              balanceDue={lastReceipt.balanceDue}
+              paymentStep={lastReceipt.step}
+              totalSteps={totalSteps}
+              onClose={() => setShowReceipt(false)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
