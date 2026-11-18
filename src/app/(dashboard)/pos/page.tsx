@@ -894,7 +894,7 @@ function OrderContent() {
 
       {/* MODAL 2: A5 PROFESSIONAL STUDIO RECEIPT */}
       <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
-        <DialogContent className="max-w-xl p-2 sm:p-5 bg-slate-100 overflow-y-auto max-h-[96vh]">
+        <DialogContent className="max-w-2xl p-4 sm:p-6 bg-slate-50 overflow-y-auto max-h-[92vh]">
           {lastReceipt && (
             <A5Receipt 
               billNo={lastReceipt.billNo}
