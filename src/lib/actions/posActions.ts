@@ -15,18 +15,22 @@ export async function getInventoryItems() {
 
 // 2. Save the Order with Step Logic
 export async function createStepOrder(orderData: any) {
+  const subtotal = Number(orderData.subtotal !== undefined ? orderData.subtotal : orderData.totalAmount) || 0;
   const totalAmount = Number(orderData.totalAmount) || 0;
   const paidNow = Number(orderData.paidNow) || 0;
   const paymentStep = Number(orderData.currentStep) || 1;
   const customerName = (orderData.customerName || "").trim();
   const customerPhone = (orderData.customerPhone || "").trim();
   const billNo = (orderData.billNo || `#GS-${Math.floor(1000 + Math.random() * 9000)}`).toUpperCase();
+  const discount = orderData.discount || null;
 
   const newOrder = {
     billNo,
     customerName,
     customerPhone,
     items: orderData.items || [],
+    subtotal,
+    discount,
     totalAmount,
     advancePaid: paidNow,
     paymentStep,

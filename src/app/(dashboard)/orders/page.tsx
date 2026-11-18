@@ -20,6 +20,15 @@ interface OrderItem {
   price: number;
 }
 
+interface OrderDiscount {
+  id?: string;
+  name: string;
+  code?: string;
+  type?: "PERCENTAGE" | "FIXED";
+  value?: number;
+  amount: number;
+}
+
 interface Order {
   _id: string;
   id: string;
@@ -27,6 +36,8 @@ interface Order {
   customerName: string;
   customerPhone?: string;
   items?: OrderItem[];
+  subtotal?: number;
+  discount?: OrderDiscount;
   totalAmount: number;
   advancePaid: number;
   paymentStep?: number;
@@ -70,7 +81,17 @@ function OrdersContent() {
   useEffect(() => {
     const q = searchParams.get("q");
     if (q) setSearchTerm(q);
-  }, [searchParams]);
+    if (q && orders.length > 0) {
+      const cleanQ = q.trim().toLowerCase().replace("#", "");
+      const match = orders.find(
+        (o) => (o.billNo || "").toLowerCase().replace("#", "") === cleanQ ||
+               (o._id || "").toLowerCase().slice(0, 5) === cleanQ
+      );
+      if (match) {
+        setSelectedOrder(match);
+      }
+    }
+  }, [searchParams, orders]);
 
   // Filter orders by search term (Bill #, Customer Name, Phone) and Status
   const filteredOrders = useMemo(() => {
@@ -451,6 +472,18 @@ function OrdersContent() {
 
               {/* Financial Balance Summary */}
               <div className="bg-slate-900 text-white p-4 rounded-lg space-y-2">
+                {selectedOrder.subtotal !== undefined && selectedOrder.subtotal > selectedOrder.totalAmount && (
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>Subtotal</span>
+                    <span>Rs. {Number(selectedOrder.subtotal).toLocaleString()}</span>
+                  </div>
+                )}
+                {selectedOrder.discount && Number(selectedOrder.discount.amount) > 0 && (
+                  <div className="flex justify-between text-xs text-emerald-400 font-bold">
+                    <span>Discount ({selectedOrder.discount.name})</span>
+                    <span>- Rs. {Number(selectedOrder.discount.amount).toLocaleString()}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">Total Order Amount</span>
                   <span className="font-bold">Rs. {Number(selectedOrder.totalAmount).toLocaleString()}</span>
@@ -566,6 +599,18 @@ function OrdersContent() {
 
               {/* Financial Summary */}
               <div className="space-y-2.5 pt-4 border-t-2 border-slate-900">
+                {receiptOrder.subtotal !== undefined && receiptOrder.subtotal > receiptOrder.totalAmount && (
+                  <div className="flex justify-between text-xs md:text-sm text-slate-500">
+                    <span>Subtotal</span>
+                    <span>Rs. {Number(receiptOrder.subtotal).toLocaleString()}</span>
+                  </div>
+                )}
+                {receiptOrder.discount && Number(receiptOrder.discount.amount) > 0 && (
+                  <div className="flex justify-between text-xs md:text-sm text-emerald-600 font-bold">
+                    <span>Discount ({receiptOrder.discount.name})</span>
+                    <span>- Rs. {Number(receiptOrder.discount.amount).toLocaleString()}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-base md:text-lg font-black text-slate-900">
                   <span>Total Amount</span>
                   <span>Rs. {Number(receiptOrder.totalAmount).toLocaleString()}</span>

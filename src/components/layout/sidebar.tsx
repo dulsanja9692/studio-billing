@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, ShoppingCart, Package, LogOut, FileText } from "lucide-react";
+import { Home, Users, ShoppingCart, Package, LogOut, FileText, Percent } from "lucide-react";
 import { logoutAction } from "@/lib/actions/authActions";
 
 export default function Sidebar() {
@@ -22,6 +22,7 @@ export default function Sidebar() {
       items: [
         { name: "POS", href: "/pos", icon: ShoppingCart },
         { name: "Invoices & History", href: "/orders", icon: FileText },
+        { name: "Discounts & Offers", href: "/discounts", icon: Percent },
         { name: "Products", href: "/Product", icon: Package },
       ],
     },
